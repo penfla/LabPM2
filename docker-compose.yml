@@ -10,6 +10,4 @@ services:
     environment:
       COOKIE_SECURE: "0"
     volumes:
-      - labpm-data:/data
-volumes:
-  labpm-data:
+      - ${LABPM_DATA:-./data}:/data   # the only setting: folder for database, attachments, backups

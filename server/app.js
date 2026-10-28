@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-alpha.1
+ * Version: 2.0.0-beta.1
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: HTTP API (auth, CRUD with RBAC, SSE change feed, import/export, audit) and static client
@@ -24,6 +24,7 @@ var crypto = require('node:crypto');
 var D = require('./db');
 var V = require('./validate');
 var P = require('./perms');
+var L = require('./logic');
 
 var COOKIE = 'labpm_sid';
 var TTL = 12 * 3600 * 1000;
@@ -31,7 +32,10 @@ var CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'sel
 
 function createApp(opts) {
   opts = opts || {};
-  var db = D.open(opts.dbPath || ':memory:');
+  var db = D.open(opts.dbPath || ':memory:', opts.wal);
+  var attDir = opts.attachmentsDir || null;
+  var maxUpload = (opts.maxUploadMb || 25) * 1048576;
+  if (attDir) fs.mkdirSync(attDir, { recursive: true });
   var pub = opts.publicDir || path.join(__dirname, '..', 'public');
   var secure = !!opts.cookieSecure;
   var clients = [];
@@ -73,6 +77,32 @@ function createApp(opts) {
     });
   }
 
+  /* ---- derived changes: cascade, automations, overdue (server-side, same transaction) ---- */
+  function newId(prefix) { return prefix + crypto.randomBytes(5).toString('hex'); }
+  function runEngine(actor, fn) {
+    var rows = db.prepare("SELECT id, data, rev FROM entities WHERE kind='tasks'").all().map(function (r) { return { d: JSON.parse(r.data), rev: r.rev, s: r.data }; });
+    var meta = {};
+    rows.forEach(function (r) { meta[r.d.id] = r; });
+    var rules = db.prepare("SELECT data FROM entities WHERE kind='rules'").all().map(function (r) { return JSON.parse(r.data); });
+    var eng = new L.Engine(rows.map(function (r) { return r.d; }), rules, { today: L.iso(new Date()), now: Date.now(), uid: newId });
+    fn(eng);
+    var evs = [];
+    Object.keys(eng.touched).forEach(function (id) {
+      var t = eng.byId[id], m = meta[id];
+      if (m && JSON.stringify(t) === m.s) return;
+      var d = V.normalize('tasks', t), rev = m ? m.rev + 1 : 1;
+      q.putEnt.run('tasks', id, JSON.stringify(d), rev, Date.now(), actor);
+      evs.push(emit(actor, 'tasks', id, m ? 'update' : 'create', rev, d));
+    });
+    eng.notices.forEach(function (n) { evs.push(emit(actor, 'notice', n.rule, 'notify', null, n)); });
+    return evs;
+  }
+  function sweep() {
+    var evs = D.tx(db, function () { return runEngine('system', function (e) { e.checkOverdue(); }); });
+    broadcast(evs);
+    return evs.length;
+  }
+
   /* ---- mutations (all run in one transaction; return events to broadcast) ---- */
   function upsert(user, kind, body, ifRev, mode) {
     var d = V.normalize(kind, body);
@@ -86,9 +116,15 @@ function createApp(opts) {
     }
     if (kind === 'users' && cur && cur.d.role === 'Admin' && d.role !== 'Admin' && q.admins.get().n <= 1) throw err(409, 'cannot demote the last Admin');
     if (kind === 'users' && !cur) throw err(400, 'create users via /api/accounts');
+    if (kind === 'tasks' && cur && cur.d.status !== d.status && d.status !== 'Triage' && d.status !== 'To do') {
+      var bl = d.deps.map(function (x) { return get('tasks', x); }).filter(function (x) { return x && x.d.status !== 'Done'; });
+      if (bl.length) throw err(409, 'Blocked by: ' + bl.map(function (x) { return x.d.title; }).join('; '));
+    }
     var rev = cur ? cur.rev + 1 : 1;
     q.putEnt.run(kind, d.id, JSON.stringify(d), rev, Date.now(), user.id);
-    return [emit(user.id, kind, d.id, cur ? 'update' : 'create', rev, d)];
+    var evs = [emit(user.id, kind, d.id, cur ? 'update' : 'create', rev, d)];
+    if (kind === 'tasks') evs = evs.concat(runEngine(user.id, function (e) { e.update(cur && cur.d, e.byId[d.id]); }));
+    return evs;
   }
   function patch(user, kind, id, fields, ifRev) {
     var cur = get(kind, id);
@@ -109,6 +145,14 @@ function createApp(opts) {
     }
     q.delEnt.run(kind, id);
     evs.push(emit(user.id, kind, id, 'delete', cur.rev + 1, null));
+    if (kind === 'files') afterCommit.push(function () { fs.unlinkSync(attPath(id)); });
+    if (kind === 'tasks') {
+      db.prepare("SELECT id, rev FROM entities WHERE kind='files' AND json_extract(data,'$.taskId')=?").all(id).forEach(function (f) {
+        q.delEnt.run('files', f.id);
+        evs.push(emit(user.id, 'files', f.id, 'delete', f.rev + 1, null));
+        afterCommit.push(function () { fs.unlinkSync(attPath(f.id)); });
+      });
+    }
     if (kind === 'tasks') { // detach dependencies pointing at the deleted task
       db.prepare("SELECT id FROM entities WHERE kind='tasks'").all().forEach(function (r) {
         var t = get('tasks', r.id);
@@ -187,7 +231,7 @@ function createApp(opts) {
     req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
-    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-alpha.1' });
+    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.1' });
 
     if (p === '/api/setup' && m === 'POST') return body(req).then(function (b) {
       var out = D.tx(db, function () { if (q.acctCount.get().n) throw err(409, 'already initialised'); return newAccount(b, 'Admin'); });
@@ -253,8 +297,11 @@ function createApp(opts) {
       broadcast([out.ev]); json(res, 201, { user: out.u });
     });
 
+    if (p === '/api/files' && m === 'POST') return upload(req, res, url, user);
+    if (seg[1] === 'files' && seg[3] === 'download' && m === 'GET') return download(res, seg[2]);
     if (seg[0] === 'api' && P.KINDS.indexOf(seg[1]) >= 0) {
       var kind = seg[1], id = seg[2];
+      if (kind === 'files' && m !== 'GET' && m !== 'DELETE') throw err(405, 'use POST /api/files?name=... to upload');
       if (!id && m === 'POST') return body(req).then(function (b) { return mutate(req, res, function () { return upsert(user, kind, b, null, 'create'); }, 201); });
       if (id && m === 'GET') { var r = get(kind, id); if (!r) throw err(404, 'not found'); return json(res, 200, { item: r.d, rev: r.rev }); }
       if (id && m === 'PUT') return body(req).then(function (b) { b.id = id; return mutate(req, res, function () { return upsert(user, kind, b, ifRev, 'update'); }); });
@@ -263,9 +310,12 @@ function createApp(opts) {
     }
     throw err(404, 'not found');
   }
+  var afterCommit = [];
   function mutate(req, res, fn, okStatus) {
+    afterCommit = [];
     var evs = D.tx(db, fn);
-    evs.forEach(function (m) { m.cid = req.cid; });
+    afterCommit.forEach(function (f) { try { f(); } catch (e) { /* file already gone */ } });
+    evs[0].cid = req.cid; // derived events (cascade, automations) carry no cid so the originating client applies them too
     broadcast(evs);
     var main = evs[0];
     json(res, okStatus || 200, { id: main.id, rev: main.rev, seq: main.seq, item: main.data });
@@ -294,6 +344,57 @@ function createApp(opts) {
     return evs;
   }
 
+  /* ---- attachments: raw upload, authenticated download ---- */
+  function attPath(id) { if (!attDir || !V.ID_RE.test(id)) throw err(500, 'attachments disabled'); return path.join(attDir, id); }
+  function safeName(n) { return String(n || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').replace(/^\.+/, '_').slice(0, 200) || 'file'; }
+  function upload(req, res, url, user) {
+    if (!attDir) throw err(501, 'attachments not enabled');
+    var taskId = url.searchParams.get('taskId') || '', projectId = url.searchParams.get('projectId') || '';
+    var task = taskId ? get('tasks', taskId) : null;
+    if (taskId && !task) throw err(404, 'task not found');
+    if (projectId && !get('projects', projectId)) throw err(404, 'project not found');
+    if (!P.can(user, 'create', 'files', null, null) || (user.role === 'Researcher' && !(task && task.d.assignee === user.id))) throw err(403, 'forbidden');
+    var len = +req.headers['content-length'];
+    if (!isFinite(len) || len <= 0) throw err(411, 'Content-Length required');
+    if (len > maxUpload) throw err(413, 'file too large (max ' + Math.round(maxUpload / 1048576) + ' MB)');
+    var id = newId('f'), dest = attPath(id), tmp = dest + '.part', n = 0, failed = false;
+    var out = fs.createWriteStream(tmp);
+    var fail = function (e) { if (failed) return; failed = true; out.destroy(); fs.rm(tmp, { force: true }, function () {}); if (!res.headersSent) { var s = e.status || 500; json(res, s, { error: s === 500 ? 'upload failed' : e.message }); } };
+    req.on('data', function (c) { n += c.length; if (n > maxUpload || n > len) { fail(err(413, 'file too large')); req.destroy(); } });
+    req.on('error', fail); out.on('error', fail);
+    out.on('finish', function () {
+      if (failed) return;
+      try {
+        fs.renameSync(tmp, dest);
+        var rec = { id: id, taskId: taskId || null, projectId: projectId || (task && task.d.projectId) || null, name: safeName(url.searchParams.get('name')), path: '', size: n, type: String(req.headers['content-type'] || '').slice(0, 120), added: Date.now(), by: user.id };
+        var evs = D.tx(db, function () { var d = V.normalize('files', rec); q.putEnt.run('files', id, JSON.stringify(d), 1, Date.now(), user.id); return [emit(user.id, 'files', id, 'create', 1, d)]; });
+        evs[0].cid = req.cid; broadcast(evs);
+        json(res, 201, { id: id, rev: 1, item: evs[0].data });
+      } catch (e) { fail(e); }
+    });
+    req.pipe(out);
+  }
+  function download(res, id) {
+    var f = get('files', id);
+    if (!f) throw err(404, 'not found');
+    var fp = attPath(id);
+    if (!fs.existsSync(fp)) throw err(404, 'file missing on server');
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': fs.statSync(fp).size, 'Content-Disposition': "attachment; filename*=UTF-8''" + encodeURIComponent(f.d.name), 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
+    fs.createReadStream(fp).pipe(res);
+  }
+
+  /* ---- backup (consistent copy via VACUUM INTO) ---- */
+  function backup(dir, keep) {
+    fs.mkdirSync(dir, { recursive: true });
+    var d = new Date(), st = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    var f = path.join(dir, 'labpm-' + st + '.sqlite');
+    if (fs.existsSync(f)) return f;
+    db.exec("VACUUM INTO '" + f.replace(/'/g, "''") + "'");
+    var all = fs.readdirSync(dir).filter(function (x) { return /^labpm-\d{8}-\d{4}\.sqlite$/.test(x); }).sort();
+    while (all.length > (keep || 14)) fs.unlinkSync(path.join(dir, all.shift()));
+    return f;
+  }
+
   /* ---- static files ---- */
   var MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
   function serveStatic(req, res, url) {
@@ -318,8 +419,10 @@ function createApp(opts) {
       if (r && r.catch) r.catch(done);
     } catch (e) { done(e); }
   });
-  server.on('close', function () { clients.forEach(function (c) { c.res.end(); }); try { db.close(); } catch (e) { /* closed */ } });
-  return { server: server, db: db };
+  var sweepTimer = setInterval(sweep, opts.sweepMs || 60000); sweepTimer.unref();
+  sweep();
+  server.on('close', function () { clearInterval(sweepTimer); clients.forEach(function (c) { c.res.end(); }); try { db.close(); } catch (e) { /* closed */ } });
+  return { server: server, db: db, sweep: sweep, backup: backup };
 }
 
 module.exports = { createApp: createApp };

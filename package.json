@@ -1,6 +1,6 @@
 {
   "name": "labpm",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-beta.1",
   "description": "LabPM v2: multi-user project, task and request manager for chemical/polymer laboratories (Node + SQLite server).",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",

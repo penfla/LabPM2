@@ -4,11 +4,11 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-alpha.1
+ * Version: 2.0.0-beta.1
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: SQLite schema, transactions, password hashing
- * Method: node:sqlite WAL; scrypt (N=32768) password hashes; sessions stored as SHA-256 of token
+ * Method: node:sqlite (rollback journal, safe on LAN shares; WAL optional); scrypt (N=32768) password hashes; sessions stored as SHA-256 of token
  * Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
  * Third-party components: none (Node.js built-ins only)
  * Scientific references: n/a
@@ -20,9 +20,10 @@
 var sqlite = require('node:sqlite');
 var crypto = require('node:crypto');
 
-function open(file) {
+function open(file, wal) {
   var db = new sqlite.DatabaseSync(file);
-  db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;');
+  // rollback journal by default: WAL needs shared memory and is unsafe on network shares
+  db.exec('PRAGMA journal_mode=' + (wal ? 'WAL' : 'DELETE') + '; PRAGMA synchronous=' + (wal ? 'NORMAL' : 'FULL') + '; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
   db.exec([
     'CREATE TABLE IF NOT EXISTS accounts(id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL COLLATE NOCASE, hash TEXT NOT NULL, created INTEGER NOT NULL);',
     'CREATE TABLE IF NOT EXISTS sessions(sid TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);',

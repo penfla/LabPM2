@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-alpha.1
+ * Version: 2.0.0-beta.1
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: Browser end-to-end test, two concurrent sessions (login, live sync, RBAC)
@@ -26,7 +26,8 @@ try { pw = require('playwright'); } catch (e) { pw = null; }
 var T = { id: 't1', projectId: 'p1', title: 'DSC run PP-04', status: 'To do', priority: 'Medium', assignee: null, start: '2026-11-02', due: '2026-11-03', est: 4, deps: [], tags: [], cf: {}, notes: '', log: [] };
 
 test('two browsers: login, live update, role enforcement', { skip: !pw && 'playwright not installed', timeout: 120000 }, async function () {
-  var a = app.createApp({ dbPath: ':memory:' }), srv = a.server;
+  var attDir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'labpm-e2e-'));
+  var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir }), srv = a.server;
   await new Promise(function (r) { srv.listen(0, '127.0.0.1', r); });
   var base = 'http://127.0.0.1:' + srv.address().port;
   var browser = await pw.chromium.launch();
@@ -56,6 +57,13 @@ test('two browsers: login, live update, role enforcement', { skip: !pw && 'playw
     await A.click('tr[data-id=t1]');
     await A.selectOption('select[data-ch=dr][data-f=status]', 'In progress');
     await B.waitForFunction(function () { return /In progress/.test(document.querySelector('#vb').innerText); }, null, { timeout: 5000 });
+    await A.keyboard.press('Escape');
+    // A uploads a file from the Files page; B (Viewer) sees it and can download it
+    await A.click('[data-act=nav][data-v=files]'); await B.click('[data-act=nav][data-v=files]');
+    await A.setInputFiles('input[data-ch=fupg]', { name: 'dsc-report.txt', mimeType: 'text/plain', buffer: Buffer.from('Tm 165.2 C') });
+    await B.waitForSelector('text=dsc-report.txt', { timeout: 5000 });
+    var body = await B.evaluate(function () { var h = document.querySelector('a[href*="/download"]').getAttribute('href'); return fetch(h).then(function (r) { return r.text(); }); });
+    assert.strictEqual(body, 'Tm 165.2 C');
     // Viewer attempts a write through the API: forbidden server-side
     var s = await B.evaluate(function () { return fetch('/api/tasks/t1', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Done' }) }).then(function (r) { return r.status; }); });
     assert.strictEqual(s, 403);

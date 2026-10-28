@@ -1,6 +1,6 @@
 # LabPM v2 — architecture (alpha)
 
-Author: Flavio Pendolino · Version: 2.0.0-alpha.1 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
+Author: Flavio Pendolino · Version: 2.0.0-beta.1 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
 Purpose: central multi-user server for LabPM (option C). Method: Node.js built-ins + SQLite. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:sqlite`, `node:crypto`). Reference baseline: https://github.com/penfla/LabPM (v1.3.0).
@@ -32,16 +32,16 @@ Researcher on own tasks may change: `status notes est tags cf log timer priority
 ## Roadmap
 1. ✅ server, auth, RBAC, rev/409, SSE, import/export, tests
 2. ✅ client sync layer (`public/index.html`): login/first-run screens, `GET /api/state`, diff-based push of local edits, 409 → per-field merge + retry, SSE with replay, deferred re-render while typing, Playwright two-browser test
-3. server-side date cascade, automations (shared module, tested), conflicts
-4. attachments on disk (limit, sanitised name, authenticated download)
-5. scheduled SQLite backup/restore, Playwright two-browser test, CHANGELOG 2.0.0 and v1→v2 migration guide
+3. ✅ server-side cascade, automations, overdue sweep (`server/logic.js`)
+4. ✅ attachments on disk, ✅ daily backup
+5. open: restore tool for backups, v1→v2 migration guide, rewritten USER_GUIDE/SECURITY
 
-## Known limitations (alpha.1)
-- Date cascade, automations and overdue check still run in the client (overdue check only for Admin/PM). Two PM sessions can duplicate an automation until milestone 3.
-- Attachments and the Files page are removed from the client until milestone 4 (server storage).
+## Known limitations (beta.1)
 - No offline mode: edits made while the server is unreachable stay in the open page and are retried; closing the page loses them (the browser warns).
 - Activity log shows only changes received during the session; the authoritative trail is `/api/audit`.
-- External fonts were removed (no third-party requests; system font fallbacks).
+- HTTP only on the LAN by default; for HTTPS put Caddy/nginx in front and set `COOKIE_SECURE=1`.
+- Restore: stop the server and copy a file from `backups/` over `labpm.sqlite` (UI restore not yet available).
+- Keep the data folder on storage that honours file locking; run exactly one server per folder.
 
 ---
 © Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
