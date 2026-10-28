@@ -31,10 +31,17 @@ Researcher on own tasks may change: `status notes est tags cf log timer priority
 
 ## Roadmap
 1. ✅ server, auth, RBAC, rev/409, SSE, import/export, tests
-2. client sync layer in `public/index.html`: login screen, `GET /api/state`, optimistic mutations, 409 handling, SSE reconnect, "modified by X"
+2. ✅ client sync layer (`public/index.html`): login/first-run screens, `GET /api/state`, diff-based push of local edits, 409 → per-field merge + retry, SSE with replay, deferred re-render while typing, Playwright two-browser test
 3. server-side date cascade, automations (shared module, tested), conflicts
 4. attachments on disk (limit, sanitised name, authenticated download)
 5. scheduled SQLite backup/restore, Playwright two-browser test, CHANGELOG 2.0.0 and v1→v2 migration guide
+
+## Known limitations (alpha.1)
+- Date cascade, automations and overdue check still run in the client (overdue check only for Admin/PM). Two PM sessions can duplicate an automation until milestone 3.
+- Attachments and the Files page are removed from the client until milestone 4 (server storage).
+- No offline mode: edits made while the server is unreachable stay in the open page and are retried; closing the page loses them (the browser warns).
+- Activity log shows only changes received during the session; the authoritative trail is `/api/audit`.
+- External fonts were removed (no third-party requests; system font fallbacks).
 
 ---
 © Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).

@@ -184,6 +184,7 @@ function createApp(opts) {
   function route(req, res, url, user) {
     var m = req.method, p = url.pathname, seg = p.split('/').filter(Boolean); // ['api', ...]
     var ifm = req.headers['if-match'];
+    req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
     if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-alpha.1' });
@@ -236,8 +237,15 @@ function createApp(opts) {
     if (p === '/api/export' && m === 'GET') { if (user.role !== 'Admin') throw err(403, 'forbidden'); return json(res, 200, snapshot().state); }
     if (p === '/api/import' && m === 'POST') return body(req, 50e6).then(function (b) {
       if (user.role !== 'Admin') throw err(403, 'forbidden');
-      var evs = D.tx(db, function () { return importSession(user, b); });
+      var evs = D.tx(db, function () { return importSession(user, b, url.searchParams.get('users') === '1'); });
       broadcast(evs); json(res, 200, { imported: evs.length });
+    });
+    if (seg[1] === 'accounts' && seg[3] === 'password' && m === 'POST') return body(req, 1e4).then(function (b) {
+      if (user.role !== 'Admin') throw err(403, 'forbidden');
+      if (!get('users', seg[2])) throw err(404, 'not found');
+      checkPwPolicy(b.password);
+      q.setHash.run(D.hashPw(b.password), seg[2]); q.delUserSess.run(seg[2]);
+      json(res, 200, { ok: true });
     });
     if (p === '/api/accounts' && m === 'POST') return body(req, 1e4).then(function (b) {
       if (user.role !== 'Admin') throw err(403, 'forbidden');
@@ -247,21 +255,22 @@ function createApp(opts) {
 
     if (seg[0] === 'api' && P.KINDS.indexOf(seg[1]) >= 0) {
       var kind = seg[1], id = seg[2];
-      if (!id && m === 'POST') return body(req).then(function (b) { return mutate(res, function () { return upsert(user, kind, b, null, 'create'); }, 201); });
+      if (!id && m === 'POST') return body(req).then(function (b) { return mutate(req, res, function () { return upsert(user, kind, b, null, 'create'); }, 201); });
       if (id && m === 'GET') { var r = get(kind, id); if (!r) throw err(404, 'not found'); return json(res, 200, { item: r.d, rev: r.rev }); }
-      if (id && m === 'PUT') return body(req).then(function (b) { b.id = id; return mutate(res, function () { return upsert(user, kind, b, ifRev, 'update'); }); });
-      if (id && m === 'PATCH') return body(req).then(function (b) { return mutate(res, function () { return patch(user, kind, id, b, ifRev); }); });
-      if (id && m === 'DELETE') return mutate(res, function () { return remove(user, kind, id, ifRev); });
+      if (id && m === 'PUT') return body(req).then(function (b) { b.id = id; return mutate(req, res, function () { return upsert(user, kind, b, ifRev, 'update'); }); });
+      if (id && m === 'PATCH') return body(req).then(function (b) { return mutate(req, res, function () { return patch(user, kind, id, b, ifRev); }); });
+      if (id && m === 'DELETE') return mutate(req, res, function () { return remove(user, kind, id, ifRev); });
     }
     throw err(404, 'not found');
   }
-  function mutate(res, fn, okStatus) {
+  function mutate(req, res, fn, okStatus) {
     var evs = D.tx(db, fn);
+    evs.forEach(function (m) { m.cid = req.cid; });
     broadcast(evs);
     var main = evs[0];
     json(res, okStatus || 200, { id: main.id, rev: main.rev, seq: main.seq, item: main.data });
   }
-  function importSession(user, o) {
+  function importSession(user, o, withUsers) {
     if (!o || o.v !== 1) throw err(400, 'unsupported session version (expected v:1)');
     var evs = [];
     P.KINDS.forEach(function (k) {
@@ -271,6 +280,7 @@ function createApp(opts) {
     // users imported from a v1 file have no credentials: they are created as role-bearing records without login
     var order = ['users', 'projects', 'fields', 'rules', 'goals', 'tasks', 'docs', 'files'];
     order.forEach(function (k) {
+      if (k === 'users' && !withUsers) return;
       (o[k] || []).forEach(function (raw) {
         if (k === 'users') { if (raw.id === user.id) return; raw = Object.assign({}, raw, { role: raw.role === 'Admin' ? 'Viewer' : raw.role }); }
         var d = V.normalize(k, raw);

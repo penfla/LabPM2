@@ -134,3 +134,17 @@ test('logout invalidates the session; login is throttled after repeated failures
   for (var i = 0; i < 12; i++) last = await req('POST', '/api/login', { username: 'ghost', password: 'wrongwrong' });
   assert.strictEqual(last.s, 429);
 });
+test('Admin resets a password (sessions revoked); import skips people unless asked', async function () {
+  var l = await req('POST', '/api/login', { username: 'view', password: 'password-view-1' });
+  var id = (await req('GET', '/api/me', undefined, l.c)).j.user.id;
+  assert.strictEqual((await req('POST', '/api/accounts/' + id + '/password', { password: 'new-password-123' }, pm)).s, 403);
+  assert.strictEqual((await req('POST', '/api/accounts/' + id + '/password', { password: 'new-password-123' }, admin)).s, 200);
+  assert.strictEqual((await req('GET', '/api/me', undefined, l.c)).s, 401);
+  assert.strictEqual((await req('POST', '/api/login', { username: 'view', password: 'new-password-123' })).s, 200);
+  var n0 = (await req('GET', '/api/state', undefined, admin)).j.state.users.length;
+  await req('POST', '/api/import', { v: 1, users: [{ id: 'old1', name: 'Old', role: 'Admin', cap: 10 }] }, admin);
+  assert.strictEqual((await req('GET', '/api/state', undefined, admin)).j.state.users.length, n0);
+  await req('POST', '/api/import?users=1', { v: 1, users: [{ id: 'old1', name: 'Old', role: 'Admin', cap: 10 }] }, admin);
+  var u = (await req('GET', '/api/users/old1', undefined, admin)).j.item;
+  assert.strictEqual(u.role, 'Viewer');
+});

@@ -4,13 +4,13 @@ Copyright (c) 2026 Flavio Pendolino
 https://polyformproject.org/licenses/noncommercial/1.0.0
 
 Author: Flavio Pendolino
-Version: 1.3
+Version: 2.0.0-alpha.1
 License: PolyForm Noncommercial 1.0.0
 Commercial use: penfla@me.com
 Purpose: Project, task, resource and request management for a chemical/polymer laboratory.
-Method: Single-file HTML, vanilla JavaScript; data in browser localStorage, optional autosave to a user-chosen folder (File System Access API); attachments copied into an 'attachments' subfolder of that folder; sessions saved as local snapshots or JSON files; task export as .xlsx (OOXML written in-page). Deterministic calculations.
+Method: Single-page client (vanilla JavaScript) for the LabPM server: login, REST sync with per-record revisions, SSE live updates, field-level merge on conflict; finish-to-start date cascade on working days; task export as .xlsx (OOXML written in-page). Deterministic calculations.
 Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
-Third-party components: IBM Plex Sans, IBM Plex Mono, Bricolage Grotesque (Google Fonts, SIL OFL 1.1).
+Third-party components: none (system fonts; no external requests).
 Scientific references: ASTM D3418, ISO 11357-3, ISO 1133-1, ISO 527-3, ASTM D3985 (cited in the templates).
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 -->
@@ -18,12 +18,11 @@ AI disclosure: this tool performs deterministic calculations; it does not genera
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 
 <title>LabPM — Laboratory project management</title>
-<meta name="description" content="Single-file project, task, resource and request manager for chemical/polymer laboratories.">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<meta name="description" content="Multi-user project, task, resource and request manager for chemical/polymer laboratories.">
 <style>
 /* Layout: navigation rail on the left + work area; on phones the rail becomes a scrolling bar. */
 :root{--bg:#F7F9FA;--surface:#FFFFFF;--surface2:#EFF3F5;--ink:#1B2A31;--muted:#5F727C;--line:#E0E7EA;--accent:#0F7B8A;--accent-ink:#FFFFFF;--accent-soft:#D6ECEF;--good:#2B8553;--warn:#B97A06;--bad:#C13B2B;--s0:#73848E;--s1:#3A6BCB;--s2:#B97A06;--s3:#7F55C4;--s4:#2B8553;--p0:#0F7B8A;--p1:#B5651D;--p2:#6A5ACD;--p3:#2E8B57;--p4:#C2417A;--p5:#5B7083;--wk:rgba(19,35,43,.05);--shadow:0 10px 36px rgba(19,35,43,.22);--f-d:'Bricolage Grotesque','IBM Plex Sans',system-ui,sans-serif;--f-b:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;--f-m:'IBM Plex Mono',ui-monospace,Menlo,monospace}
@@ -177,16 +176,14 @@ details.lic{font-size:12px;color:var(--muted)}details.lic pre{white-space:pre-wr
 <script>
 (function(){
 'use strict';
-var LS='labpm_v1';
 var STATUSES=['Triage','To do','In progress','In review','Done'];
 var SCOL={'Triage':'--s0','To do':'--s1','In progress':'--s2','In review':'--s3','Done':'--s4'};
 var PRIOS=['Low','Medium','High','Critical'];
 var ROLES=['Admin','Project manager','Researcher','Viewer'];
 var TOOLS=['DSC','TGA','FTIR','Rheometer','Extruder','MFR','Tensile tester','OTR','Other'];
-var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['files','Files'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Session'],['settings','Settings'],['info','Info & license']]]];
+var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Data & sync'],['settings','Settings'],['info','Info & license']]]];
 var NAVFLAT=[].concat.apply([],NAV.map(function(g){return g[1]}));
 var DESC={dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Attach files to tasks and projects; copies are stored next to the database.',portfolio:'Project progress and goals.',templates:'Start a project from a ready-made scheme.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',session:'Save your work, reopen it later or move it to another computer.',settings:'People, roles, custom fields and integrations.',info:'Author, license and references.'};
-var MAXSNAP=12;
 var TVIEWS=[['list','List'],['board','Board'],['timeline','Timeline'],['calendar','Calendar'],['workload','Workload']];
 var WN={kpi:'Indicators',status:'Task status',hours:'Hours per project',load:'6-week workload',upcoming:'Upcoming deadlines',conflicts:'Instrument conflicts',assistant:'Project summary'};
 
@@ -216,90 +213,70 @@ function opt(arr,val){return arr.map(function(a){var v=Array.isArray(a)?a[0]:a,l
 /* ---------- state ---------- */
 var S;
 function defaultUI(){var d=new Date();return {view:'dashboard',theme:'light',saved:0,tview:'list',q:'',fp:'',fa:'',fs:'',fpr:'',fdf:'',fdt:'',group:'none',cal:d.getFullYear()+'-'+pad(d.getMonth()+1),widgets:{kpi:1,status:1,hours:1,load:1,upcoming:1,conflicts:1,assistant:1},doc:null,drawer:null,confirmDel:null,ap:null,tpl:null,rb:{name:'',tt:'status_to',tv:'Done',ct:'none',cv:'',at:'notify',av:''}}}
-function seed(){
-  var B=mondayOf(TODAY());
-  var D=function(n){return normWD(addD(B,n))};
-  var users=[{id:'u1',name:'A. Rossi',role:'Admin',cap:40},{id:'u5',name:'C. Gallo',role:'Project manager',cap:30},{id:'u2',name:'L. Bianchi',role:'Researcher',cap:36},{id:'u3',name:'M. Verdi',role:'Researcher',cap:40},{id:'u4',name:'S. Neri',role:'Researcher',cap:24}];
-  var projects=[{id:'p1',name:'Compound PP-g-MAH, campaign 03',c:0,status:'auto'},{id:'p2',name:'PE/EVOH/PE film, O₂ barrier',c:1,status:'auto'},{id:'p3',name:'Instrument calibrations Q4',c:2,status:'auto'},{id:'p4',name:'Internal requests',c:5,status:'auto'}];
-  var fields=[{id:'f1',name:'Instrument',type:'select',options:TOOLS.slice()},{id:'f2',name:'No. of samples',type:'number'},{id:'f3',name:'Lot',type:'text'},{id:'f4',name:'Hours per sample',type:'formula',formula:'{est}/{No. of samples}'}];
-  var L=function(u,d,h,n){return {id:uid('l'),u:u,date:D(d),h:h,note:n}};
-  var mk=function(id,p,title,st,as,pr,s,d,est,deps,tags,cf,log){return {id:id,projectId:p,title:title,status:st,assignee:as,priority:pr,start:D(s),due:D(d),est:est,deps:deps||[],tags:tags||[],cf:cf||{},notes:'',log:log||[],timer:null,created:Date.now()}};
-  var tasks=[
-   mk('t1','p1','Drying of PP and maleic anhydride','Done','u2','Medium',-14,-12,6,[],[],{f1:'Other',f3:'PP-03A'},[L('u2',-14,3,'Vacuum oven'),L('u2',-13,3.5,'Weighing and premixing')]),
-   mk('t2','p1','Twin-screw extrusion: grafting trial','Done','u3','High',-11,-7,16,['t1'],['to-archive'],{f1:'Extruder',f2:8,f3:'PP-03A'},[L('u3',-11,6,'Thermal profile setup'),L('u3',-10,7,'Run 1-4'),L('u3',-9,5,'Run 5-8')]),
-   mk('t3','p1','DSC on pellets (ASTM D3418)','In progress','u2','High',-4,1,8,['t2'],[],{f1:'DSC',f2:8,f3:'PP-03A'},[L('u2',-4,3,'Pan preparation'),L('u2',-3,2,'Run 1-4')]),
-   mk('t4','p1','FTIR: MAH quantification','In progress','u4','High',-2,3,10,['t2'],[],{f1:'FTIR',f2:8,f3:'PP-03A'},[L('u4',-2,2.5,'Pressed films')]),
-   mk('t5','p1','MFR (ISO 1133-1), 230 °C / 2.16 kg','To do','u3','Medium',2,4,5,['t2'],[],{f1:'MFR',f2:8,f3:'PP-03A'}),
-   mk('t6','p1','Campaign 03 report','To do','u1','Medium',5,9,12,['t3','t4','t5'],[],{}),
-   mk('t7','p2','PE/EVOH/PE structure definition','Done','u1','Medium',-10,-8,6,[],[],{},[L('u1',-10,3,'Thickness selection'),L('u1',-9,2.5,'Review with production')]),
-   mk('t8','p2','Film coextrusion (blown)','In progress','u3','Critical',-1,2,20,['t7'],['extrusion'],{f1:'Extruder',f2:6,f3:'FL-11'},[L('u3',-1,6,'Line start-up')]),
-   mk('t9','p1','Twin-screw extrusion: campaign 04','To do','u3','Medium',1,3,14,[],[],{f1:'Extruder',f2:8,f3:'PP-04A'}),
-   mk('t10','p2','Film OTR (ASTM D3985)','To do','u4','High',3,6,8,['t8'],[],{f1:'OTR',f2:6,f3:'FL-11'}),
-   mk('t11','p2','Film tensile test (ISO 527-3)','To do','u2','Medium',3,5,6,['t8'],[],{f1:'Tensile tester',f2:6,f3:'FL-11'}),
-   mk('t12','p2','O₂ barrier report','To do','u1','Medium',7,10,8,['t10','t11'],[],{}),
-   mk('t13','p3','DSC calibration (indium/zinc)','To do','u2','High',-3,-1,4,[],[],{f1:'DSC'}),
-   mk('t14','p3','Analytical balance calibration','Done','u4','Medium',-5,-4,3,[],[],{},[L('u4',-5,2,'Reference weights')]),
-   mk('t15','p3','Rheometer check with standard oil','To do','u4','Medium',6,7,3,[],[],{f1:'Rheometer'}),
-   mk('t16','p4','Request: DSC on 6 recycled PET samples','Triage',null,'Medium',3,7,0,[],['request'],{f1:'DSC',f2:6,f3:'PET-R-02'})
-  ];
-  tasks[15].src='form';tasks[15].requester='Production';
-  var goals=[{id:'g1',name:'Close campaign 03 PP-g-MAH',target:D(9),pids:['p1']},{id:'g2',name:'Film O₂ barrier data',target:D(10),pids:['p2']}];
-  var rules=[
-   {id:'r1',name:'Sample archive',on:true,trigger:{type:'status_to',value:'Done'},cond:{type:'tag',value:'to-archive'},action:{type:'create_task',value:'Archive residual samples'}},
-   {id:'r2',name:'Flag overdue tasks',on:true,trigger:{type:'overdue',value:''},cond:{type:'none',value:''},action:{type:'add_tag',value:'overdue'}},
-   {id:'r3',name:'New requests to triage',on:true,trigger:{type:'created',value:''},cond:{type:'project',value:'p4'},action:{type:'set_status',value:'Triage'}}];
-  var docs=[{id:'d1',title:'Campaign 03 plan',projectId:'p1',taskId:null,updated:Date.now(),body:'# Campaign 03 plan\n\n- Matrix: PP homopolymer, MAH 1.0 wt%\n- Thermal profile and screw speed: see extrusion log\n- Characterization: DSC, FTIR, MFR\n\n**Acceptance criterion**: to be defined with the laboratory manager.'}];
-  return {v:1,me:'u1',users:users,projects:projects,tasks:tasks,fields:fields,rules:rules,goals:goals,docs:docs,files:[],activity:[],ui:defaultUI(),demo:true};
-}
-
-
-var ID=/^[A-Za-z0-9_-]{1,40}$/,DT=/^\d{4}-\d{2}-\d{2}$/;
-var lsOK=true;
-function normSession(o){
-  if(!o||typeof o!=='object'||o.v!==1)return null;
-  var keys=['users','projects','tasks','fields','rules','goals','docs'],i,j;
-  for(i=0;i<keys.length;i++){var a=o[keys[i]];if(!Array.isArray(a)||a.length>5000)return null;for(j=0;j<a.length;j++){if(!a[j]||typeof a[j]!=='object'||typeof a[j].id!=='string'||!ID.test(a[j].id))return null}}
-  var ok=true,S1=function(x){return String(x==null?'':x)};
-  o.users.forEach(function(u){u.name=S1(u.name);if(ROLES.indexOf(u.role)<0)u.role='Viewer';u.cap=Math.max(0,Number(u.cap)||0)});
-  o.projects.forEach(function(p){p.name=S1(p.name);p.c=Number(p.c)||0;p.status=S1(p.status)||'auto'});
-  o.fields.forEach(function(f){f.name=S1(f.name);if(['text','number','select','date','checkbox','formula'].indexOf(f.type)<0)f.type='text';if(f.type==='select')f.options=Array.isArray(f.options)?f.options.map(S1):[];if(f.type==='formula')f.formula=S1(f.formula)});
-  o.tasks.forEach(function(t){
-    if(!DT.test(S1(t.start))||!DT.test(S1(t.due)))ok=false;
-    t.title=S1(t.title);if(STATUSES.indexOf(t.status)<0)t.status='To do';if(PRIOS.indexOf(t.priority)<0)t.priority='Medium';
-    t.est=Math.max(0,Number(t.est)||0);t.projectId=S1(t.projectId);t.assignee=t.assignee?S1(t.assignee):null;t.notes=S1(t.notes);t.timer=null;
-    t.deps=Array.isArray(t.deps)?t.deps.filter(function(d){return typeof d==='string'&&ID.test(d)}):[];
-    t.tags=Array.isArray(t.tags)?t.tags.map(S1):[];t.cf=t.cf&&typeof t.cf==='object'?t.cf:{};
-    t.log=Array.isArray(t.log)?t.log.filter(function(l){return l&&typeof l.id==='string'&&ID.test(l.id)&&DT.test(S1(l.date))&&isFinite(Number(l.h))}).map(function(l){return {id:l.id,u:S1(l.u),date:l.date,h:Number(l.h),note:S1(l.note)}}):[]});
-  if(!ok)return null;
-  var TR=['status_to','created','overdue'],CT=['none','project','priority','tag'],AT=['notify','set_assignee','set_priority','set_status','add_tag','create_task'];
-  o.rules=o.rules.filter(function(r){return r.trigger&&TR.indexOf(r.trigger.type)>=0&&r.cond&&CT.indexOf(r.cond.type)>=0&&r.action&&AT.indexOf(r.action.type)>=0});
-  o.rules.forEach(function(r){r.name=S1(r.name);r.on=!!r.on;r.trigger.value=S1(r.trigger.value);r.cond.value=S1(r.cond.value);r.action.value=S1(r.action.value)});
-  o.goals.forEach(function(g){g.name=S1(g.name);if(!DT.test(S1(g.target)))g.target=iso(new Date());g.pids=Array.isArray(g.pids)?g.pids.filter(function(x){return typeof x==='string'&&ID.test(x)}):[]});
-  o.docs.forEach(function(d){d.title=S1(d.title);d.body=S1(d.body);d.projectId=S1(d.projectId);d.taskId=S1(d.taskId);d.updated=Number(d.updated)||Date.now()});
-  o.files=(Array.isArray(o.files)?o.files:[]).filter(function(f){return f&&typeof f==='object'&&typeof f.id==='string'&&ID.test(f.id)&&typeof f.path==='string'}).slice(0,5000).map(function(f){return {id:f.id,taskId:S1(f.taskId),projectId:S1(f.projectId),name:S1(f.name),path:S1(f.path),size:Math.max(0,Number(f.size)||0),type:S1(f.type),added:Number(f.added)||0,by:S1(f.by)}});
-  o.activity=(Array.isArray(o.activity)?o.activity:[]).filter(function(a){return a&&typeof a==='object'}).slice(0,300).map(function(a){return {t:Number(a.t)||0,u:S1(a.u),m:S1(a.m)}});
-  if(!o.users.some(function(u){return u.id===o.me}))o.me=o.users[0]?o.users[0].id:'';
-  var d0=defaultUI(),u=o.ui&&typeof o.ui==='object'?o.ui:{};
-  u=Object.assign(d0,u);u.widgets=Object.assign(defaultUI().widgets,u.widgets&&typeof u.widgets==='object'?u.widgets:{});
-  if(!NAVFLAT.some(function(n){return n[0]===u.view}))u.view='dashboard';
-  if(!TVIEWS.some(function(n){return n[0]===u.tview}))u.tview='list';
-  if(['light','dark','auto'].indexOf(u.theme)<0)u.theme='light';
-  if(!/^\d{4}-\d{2}$/.test(S1(u.cal)))u.cal=defaultUI().cal;
-  ['q','fp','fa','fs','fpr','group'].forEach(function(k){u[k]=S1(u[k])});
-  ['fdf','fdt'].forEach(function(k){u[k]=DT.test(S1(u[k]))?u[k]:''});
-  ['fpj','ftk','ffp'].forEach(function(k){u[k]=S1(u[k])});
-  u.rb=defaultUI().rb;u.drawer=null;u.confirmDel=null;u.confirmReset=false;u.confirmSnap=null;u.confirmClear=false;u.tpl=null;u.doc=u.doc?S1(u.doc):null;u.ap=u.ap?S1(u.ap):null;
-  o.ui=u;return o}
-function load(){try{var r=localStorage.getItem(LS);if(r){var o=normSession(JSON.parse(r));if(o)return o}}catch(e){}return null}
+/* ---------- server sync (v2): API client, diff-based push, SSE pull, auth screens ---------- */
+var COLS=['users','projects','tasks','fields','rules','goals','docs'];
+var CID=uid('c'),ME=null,REV={},SHADOW={},SY={st:'boot',last:0,busy:false,dirty:false,timer:null,es:null,pend:false,msg:''};
+function api(method,path,body,rev){var h={'X-Client-Id':CID};if(body!==undefined)h['Content-Type']='application/json';if(rev!=null)h['If-Match']=String(rev);
+  return fetch(path,{method:method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {s:r.status,j:j}})})}
+function uiKey(){return 'labpm2_ui_'+(ME?ME.id:'')}
+function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null})}catch(e){}return defaultUI()}
+function savedText(){var m={boot:'Connecting…',ok:SY.last?'Synced '+hhmm(SY.last):'Synced',sync:'Syncing…',off:'Offline: retrying, changes kept in this page',err:SY.msg||'Sync error'};return m[SY.st]||''}
 function hhmm(ts){return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
-function savedText(){var f=FS&&FS.h&&FS.on?(FS.err?' · folder: error':FS.last?' · folder '+hhmm(FS.last):' · folder: pending'):'';if(!lsOK)return 'Browser autosave unavailable: save to a file.'+f;return S&&S.ui&&S.ui.saved?'Autosaved at '+hhmm(S.ui.saved)+f:'Ready'}
-function save(){S.ui.saved=Date.now();try{localStorage.setItem(LS,JSON.stringify(S));lsOK=true}catch(e){lsOK=false}var el=document.getElementById('sv');if(el)el.textContent=savedText();folderSchedule()}
+function svStatus(st,msg){SY.st=st;SY.msg=msg||'';var el=document.getElementById('sv');if(el)el.textContent=savedText()}
+function key(k,id){return k+'/'+id}
+function snapshotShadow(){SHADOW={};COLS.forEach(function(k){S[k].forEach(function(o){SHADOW[key(k,o.id)]=JSON.stringify(o)})})}
+function save(){try{localStorage.setItem(uiKey(),JSON.stringify(S.ui))}catch(e){}syncSchedule()}
+function syncSchedule(){SY.dirty=true;if(SY.timer)return;SY.timer=setTimeout(function(){SY.timer=null;syncNow()},250)}
+function diffOps(){var ops=[],seen={};
+  COLS.forEach(function(k){S[k].forEach(function(o){var kk=key(k,o.id),js=JSON.stringify(o);seen[kk]=1;if(!(kk in SHADOW)){if(k!=='users')ops.push({m:'POST',k:k,id:o.id,o:o})}else if(SHADOW[kk]!==js)ops.push({m:'PUT',k:k,id:o.id,o:o})})});
+  Object.keys(SHADOW).forEach(function(kk){if(!seen[kk]){var i=kk.indexOf('/');ops.push({m:'DELETE',k:kk.slice(0,i),id:kk.slice(i+1)})}});
+  return ops}
+function findEnt(k,id){return S[k].find(function(o){return o.id===id})}
+function setEnt(k,id,d){var a=S[k],i=a.findIndex(function(o){return o.id===id});if(d===null){if(i>=0)a.splice(i,1)}else if(i>=0)a[i]=d;else a.push(d)}
+function mergeInto(local,base,cur){var out=Object.assign({},cur);Object.keys(local).forEach(function(f){if(JSON.stringify(local[f])!==JSON.stringify(base[f]))out[f]=local[f]});return out}
+function pushOp(op,retry){var kk=key(op.k,op.id),path='/api/'+op.k+(op.m==='POST'?'':'/'+op.id),sent=op.o?JSON.stringify(op.o):null;
+  return api(op.m,path,op.o,op.m==='POST'?null:REV[kk]).then(function(r){
+    if(r.s>=200&&r.s<300){if(op.m==='DELETE'){delete SHADOW[kk];delete REV[kk]}else{SHADOW[kk]=sent;REV[kk]=r.j.rev}return}
+    if(r.s===409&&r.j.current&&op.m==='PUT'&&!retry){var base=SHADOW[kk]?JSON.parse(SHADOW[kk]):{},m=mergeInto(op.o,base,r.j.current);REV[kk]=r.j.rev;
+      var cur=findEnt(op.k,op.id);if(cur)Object.keys(m).forEach(function(f){cur[f]=m[f]});SHADOW[kk]=JSON.stringify(r.j.current);toast('Merged with a change made by someone else.');return pushOp({m:'PUT',k:op.k,id:op.id,o:cur||m},true)}
+    if(r.s===409&&op.m==='POST'){return pullOne(op.k,op.id)}
+    if(r.s===401){showLogin();throw new Error('auth')}
+    toast((r.j&&r.j.error==='forbidden'?'Your role cannot do this: ':'Server rejected a change: ')+(r.j&&r.j.error||r.s));return pullOne(op.k,op.id)})}
+function pullOne(k,id){var kk=key(k,id);return api('GET','/api/'+k+'/'+id).then(function(r){if(r.s===200){setEnt(k,id,r.j.item);SHADOW[kk]=JSON.stringify(r.j.item);REV[kk]=r.j.rev}else{setEnt(k,id,null);delete SHADOW[kk];delete REV[kk]}SY.pend=true})}
+function syncNow(){if(SY.busy){SY.dirty=true;return}var ops=diffOps();SY.dirty=false;if(!ops.length){if(SY.st!=='ok'&&SY.st!=='boot')svStatus('ok');return}
+  SY.busy=true;svStatus('sync');
+  ops.reduce(function(p,op){return p.then(function(){return pushOp(op)})},Promise.resolve()).then(function(){SY.last=Date.now();svStatus('ok')},function(e){if(e&&e.message==='auth')return;svStatus('off');SY.dirty=true;setTimeout(syncSchedule,4000)}).then(function(){SY.busy=false;if(SY.pend){SY.pend=false;softRender()}if(SY.dirty)syncSchedule()})}
+function editing(){var a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('#auth')}
+function softRender(){if(editing()){SY.defer=true;return}render();renderDrawer()}
+document.addEventListener('focusout',function(){if(SY.defer){setTimeout(function(){if(!editing()&&SY.defer){SY.defer=false;render();renderDrawer()}},50)}});
+function applyEvent(m){if(m.cid===CID)return;var kk=key(m.kind,m.id);if(m.kind==='files')return;if(REV[kk]!=null&&m.rev<=REV[kk]&&m.op!=='delete')return;
+  if(m.op==='delete'){setEnt(m.kind,m.id,null);delete SHADOW[kk];delete REV[kk]}else{
+    var cur=findEnt(m.kind,m.id),dirty=cur&&SHADOW[kk]&&SHADOW[kk]!==JSON.stringify(cur);
+    if(dirty){var merged=mergeInto(cur,JSON.parse(SHADOW[kk]),m.data);setEnt(m.kind,m.id,merged)}else setEnt(m.kind,m.id,m.data);
+    SHADOW[kk]=JSON.stringify(m.data);REV[kk]=m.rev}
+  if(m.kind==='users'&&m.id===ME.id&&m.op==='delete'){showLogin();return}
+  if(m.user!==ME.id){var a=m.op+' '+m.kind.replace(/s$/,'')+' '+(m.data&&(m.data.title||m.data.name)||m.id);S.activity.unshift({t:m.ts,u:m.user,m:a});if(S.activity.length>300)S.activity.length=300}
+  var cm=m.kind==='tasks'&&S.ui.drawer===m.id;if(cm&&m.user!==ME.id)toast('This task was changed by '+uname(m.user)+'.');
+  SY.pend=true;if(!SY.busy){SY.pend=false;softRender()}}
+function openStream(){if(SY.es)SY.es.close();var es=new EventSource('/api/events?since='+(SY.seq||0));SY.es=es;
+  es.addEventListener('change',function(ev){try{var m=JSON.parse(ev.data);SY.seq=m.seq;applyEvent(m)}catch(e){}});
+  es.onerror=function(){if(SY.st==='ok')svStatus('off');api('GET','/api/me').then(function(r){if(r.s===401){es.close();showLogin()}})};
+  es.onopen=function(){if(SY.st==='off')svStatus('ok')}}
+function loadState(){return api('GET','/api/state').then(function(r){if(r.s!==200)throw new Error('state '+r.s);var st=r.j.state;REV=r.j.revs;SY.seq=r.j.seq;
+  S={v:1,me:ME.id,users:st.users,projects:st.projects,tasks:st.tasks,fields:st.fields,rules:st.rules,goals:st.goals,docs:st.docs,files:[],activity:[],ui:loadUi(),demo:false};
+  if(NAVFLAT.every(function(n){return n[0]!==S.ui.view}))S.ui.view='dashboard';snapshotShadow();applyTheme();svStatus('ok');SY.last=Date.now();
+  if(isPM())checkOverdue();render();renderDrawer();openStream()})}
+/* auth screens */
+function authBox(title,fields,btn,act,note){$('#app').innerHTML='<div class="app" id="auth" style="display:grid;place-items:center;min-height:80vh"><form class="card" style="max-width:360px;width:100%" data-form="'+act+'"><h2>'+esc(title)+'</h2><div class="form">'+fields.map(function(f){return '<label class="full">'+esc(f[1])+'<input name="'+f[0]+'" type="'+(f[2]||'text')+'" autocomplete="'+(f[3]||'off')+'" required></label>'}).join('')+'<label class="full"><button class="btn pri" type="submit">'+esc(btn)+'</button></label></div><p class="small muted" id="aerr" role="alert">'+esc(note||'')+'</p></form></div>'}
+function showLogin(){if(SY.es){SY.es.close();SY.es=null}ME=null;api('GET','/api/status').then(function(r){
+  if(r.j.setup)authBox('Create the first Admin',[['username','Username (3+ characters)','text','username'],['name','Display name'],['password','Password (10+ characters)','password','new-password']],'Create Admin','setup');
+  else authBox('LabPM — sign in',[['username','Username','text','username'],['password','Password','password','current-password']],'Sign in','login')})}
+document.addEventListener('submit',function(ev){var f=ev.target.closest('[data-form]');if(!f)return;ev.preventDefault();var d={};Array.prototype.forEach.call(f.elements,function(e){if(e.name)d[e.name]=e.value});
+  api('POST','/api/'+(f.dataset.form==='setup'?'setup':'login'),d).then(function(r){if(r.s>=200&&r.s<300){ME=r.j.user;loadState().catch(function(){showLogin()})}else{var e=document.getElementById('aerr');if(e)e.textContent=r.j.error||'Error '+r.s}})});
+function boot(){api('GET','/api/me').then(function(r){if(r.s===200){ME=r.j.user;return loadState()}showLogin()}).catch(function(){$('#app').innerHTML='<p style="padding:24px">Cannot reach the LabPM server.</p>'})}
+window.addEventListener('beforeunload',function(e){if(diffOps().length){e.preventDefault();e.returnValue=''}});
 function applyTheme(){var t=S&&S.ui&&S.ui.theme||'light',r=document.documentElement;if(t==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t)}
-var SNAPK='labpm_snaps_v1';
-function getSnaps(){try{var a=JSON.parse(localStorage.getItem(SNAPK));return Array.isArray(a)?a.filter(function(s){return s&&typeof s.id==='string'&&ID.test(s.id)}):[]}catch(e){return []}}
-function putSnaps(a){try{localStorage.setItem(SNAPK,JSON.stringify(a));return true}catch(e){return false}}
-function snapData(){var o=JSON.parse(JSON.stringify(S));o.ui.drawer=null;o.ui.confirmDel=null;o.ui.confirmReset=false;o.ui.confirmSnap=null;o.ui.confirmClear=false;return o}
-function autoSnap(){var a=getSnaps().filter(function(s){return s.auto!==true});a.unshift({id:uid('s'),name:'Automatic, before replacement',ts:Date.now(),auto:true,data:snapData()});if(a.length>MAXSNAP)a.length=MAXSNAP;putSnaps(a)}
+function snapData(){var o=JSON.parse(JSON.stringify(S));o.ui.drawer=null;o.ui.confirmDel=null;o.ui.confirmClear=false;return o}
 
 function log(m){S.activity.unshift({t:Date.now(),u:S.me,m:m});if(S.activity.length>300)S.activity.length=300}
 var toastT;
@@ -401,14 +378,14 @@ function render(){
   var rt=S.tasks.find(function(t){return t.timer&&t.timer.user===S.me});
   var nav=NAV.map(function(g){return '<div class="ng">'+g[0]+'</div>'+g[1].map(function(n){return '<button class="nv" data-act="nav" data-v="'+n[0]+'"'+(v===n[0]?' aria-current="page"':'')+'>'+n[1]+'</button>'}).join('')}).join('');
   var th=[['light','Light'],['dark','Dark'],['auto','Auto']].map(function(x){return '<button data-act="theme" data-v="'+x[0]+'" aria-pressed="'+(S.ui.theme===x[0])+'">'+x[1]+'</button>'}).join('');
-  $('#app').innerHTML='<div class="app"><nav class="side" aria-label="Sections"><div class="brand">LabPM<small>v1.3 · chemical laboratory</small></div>'+nav+
+  $('#app').innerHTML='<div class="app"><nav class="side" aria-label="Sections"><div class="brand">LabPM<small>v2.0 · chemical laboratory</small></div>'+nav+
     '<div class="sess"><div class="small muted" id="sv">'+esc(savedText())+'</div><button class="btn sm" data-act="nav" data-v="session">Save or open session</button></div></nav>'+
     '<main class="main"><header class="top"><div><h1>'+esc(titles[v])+'</h1><p class="sub">'+esc(DESC[v]||'')+'</p></div><div class="topr">'+
     (rt?'<button class="btn tmr" id="tb" data-act="open" data-id="'+rt.id+'"><span class="rec"></span><span id="tbt">'+elapsed(rt)+'</span></button>':'')+
     '<div class="seg" role="group" aria-label="Theme">'+th+'</div>'+
-    '<label class="who">User <select data-ch="me">'+opt(S.users.map(function(u){return [u.id,u.name+' · '+u.role]}),S.me)+'</select></label></div></header>'+
+    '<span class="who">'+esc(me().name)+' · '+esc(me().role)+' <button class="btn sm" data-act="logout">Sign out</button></span></div></header>'+
     '<div id="vb">'+body()+'</div>'+
-    '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a> · LabPM v1.3 · data stays in this browser until you save the session to a file</footer></main></div>'}
+    '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a> · LabPM v2.0 · shared database on the LabPM server</footer></main></div>'}
 function renderBody(){var e=$('#vb');if(e)e.innerHTML=body()}
 function commit(){save();renderBody();renderDrawer();var tb=$('#tb');if(!tb&&S.tasks.some(function(t){return t.timer&&t.timer.user===S.me})||tb&&!S.tasks.some(function(t){return t.timer&&t.timer.user===S.me}))render()}
 function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
@@ -583,47 +560,37 @@ function vTpl(){var sel=S.ui.tpl;
 
 /* ---------- settings ---------- */
 function vSet(){var ad=isAdmin(),json='';
-  var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?'<button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
+  var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?'<button class="btn sm" data-act="userpw" data-id="'+u.id+'">Reset password</button> <button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
   var fields=S.fields.map(function(f){return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="small mono">'+esc(f.type==='select'?(f.options||[]).join(', '):f.type==='formula'?f.formula:'')+'</td><td>'+(isPM()?'<button class="btn sm dng" data-act="fielddel" data-id="'+f.id+'">Remove</button>':'')+'</td></tr>'}).join('');
   var ints=[['Slack','https://slack.com'],['Google Calendar','https://calendar.google.com'],['Microsoft 365','https://www.microsoft.com/microsoft-365'],['Jira','https://www.atlassian.com/software/jira'],['GitHub','https://github.com'],['Benchling (ELN)','https://www.benchling.com'],['SciNote (ELN)','https://www.scinote.net']];
   return '<section class="card"><h2>Users and roles</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Role</th><th>Capacity h/wk</th><th></th></tr></thead><tbody>'+users+'</tbody></table></div>'+
-   (ad?'<div class="tools" style="margin-top:10px"><input id="nu-n" placeholder="Name"><select id="nu-r">'+opt(ROLES,'Researcher')+'</select><button class="btn pri" data-act="useradd">Add</button></div>':'')+
-   '<ul class="small muted"><li>Admin: everything, including people and roles.</li><li>Project manager: projects, tasks, rules, templates, assignments.</li><li>Researcher: edits and logs hours on own tasks.</li><li>Viewer: read-only.</li></ul><p class="small muted">Access control is simulated in the UI (switch user at the top): without a server it is not a security measure.</p></section>'+
+   (ad?'<div class="tools" style="margin-top:10px"><input id="nu-n" placeholder="Name"><input id="nu-u" placeholder="Username" autocomplete="off"><input id="nu-p" type="password" placeholder="Password (10+)" autocomplete="new-password"><select id="nu-r">'+opt(ROLES,'Researcher')+'</select><button class="btn pri" data-act="useradd">Create account</button></div>':'')+
+   '<ul class="small muted"><li>Admin: everything, including people and roles.</li><li>Project manager: projects, tasks, rules, templates, assignments.</li><li>Researcher: edits and logs hours on own tasks.</li><li>Viewer: read-only.</li></ul><p class="small muted">Roles are enforced by the server on every request.</p></section>'+
    '<section class="card"><h2>Custom fields</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Type</th><th>Options / formula</th><th></th></tr></thead><tbody>'+fields+'</tbody></table></div>'+
    (isPM()?'<div class="form" style="margin-top:10px"><label>Name<input id="nf-n"></label><label>Type<select id="nf-t">'+opt(['text','number','select','date','checkbox','formula'],'text')+'</select></label><label class="full">Options (comma-separated) or formula, e.g. <span class="mono">{est}/{No. of samples}</span>. Variables: est, logged, numeric fields.<input id="nf-x"></label><label class="full"><button class="btn pri" data-act="fieldadd" style="width:max-content">Add field</button></label></div>':'')+'</section>'+
-   '<section class="card"><h2>Integrations and backup</h2><p class="muted">No automatic integration is active: a backend would be required. Calendar export (ICS) and JSON backup are available now. Useful links:</p><p>'+ints.map(function(i){return '<a href="'+i[1]+'" target="_blank" rel="noopener">'+esc(i[0])+'</a>'}).join(' · ')+'</p>'+
-   '<div class="tools"><button class="btn" data-act="copyics">Copy ICS calendar</button><button class="btn" data-act="copyjson">Copy JSON backup</button><button class="btn" data-act="impjson"'+(isAdmin()?'':' disabled')+'>Import from field</button><button class="btn dng" data-act="reset"'+(isAdmin()?'':' disabled')+'>'+(S.ui.confirmReset?'Confirm: restore sample data':'Restore sample data')+'</button></div><textarea id="jb" rows="4" placeholder="Paste a JSON backup here to import it" style="margin-top:10px"></textarea></section>'+
+   '<section class="card"><h2>Integrations and backup</h2><p class="muted">No external integration is active. Calendar export (ICS) and JSON copy are available. Useful links:</p><p>'+ints.map(function(i){return '<a href="'+i[1]+'" target="_blank" rel="noopener">'+esc(i[0])+'</a>'}).join(' · ')+'</p>'+
+   '<div class="tools"><button class="btn" data-act="copyics">Copy ICS calendar</button><button class="btn" data-act="copyjson">Copy JSON backup</button></div></section>'+
    '<section class="card"><h2>Activity log</h2><div class="lst small">'+(S.activity.slice(0,40).map(function(a){return '<div style="display:block"><span class="mono muted">'+new Date(a.t).toLocaleString('en-GB')+'</span> · '+esc(uname(a.u))+': '+esc(a.m)+'</div>'}).join('')||'<span class="muted">No activity recorded.</span>')+'</div></section>'}
 
 /* ---------- info and license ---------- */
 function vInfo(){
   return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>1.3</dd><dt>License</dt><dd>PolyForm Noncommercial 1.0.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
    '<dt>Purpose</dt><dd>Project, task, resource and request management in a chemical/polymer laboratory, with the typical features of Asana and monday.com.</dd>'+
-   '<dt>Method</dt><dd>Single-file HTML with vanilla JavaScript; data in browser localStorage; finish-to-start date cascade on working days; workload = remaining hours spread over working days; sessions saved as browser snapshots or JSON files.</dd>'+
+   '<dt>Method</dt><dd>Vanilla JavaScript client for the LabPM server (SQLite, SSE live updates); finish-to-start date cascade on working days; workload = remaining hours spread over working days; data shared through the server; full export/import as JSON.</dd>'+
    '<dt>Disclaimer</dt><dd>validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.</dd>'+
-   '<dt>Third-party components</dt><dd>IBM Plex Sans, IBM Plex Mono, Bricolage Grotesque (Google Fonts, SIL OFL 1.1) · <a href="https://fonts.google.com" target="_blank" rel="noopener">fonts.google.com</a></dd>'+
+   '<dt>Third-party components</dt><dd>None (system fonts; no external requests).</dd>'+
    '<dt>Scientific references</dt><dd>ASTM D3418, ISO 11357-3, ISO 1133-1, ISO 527-3, ASTM D3985 (cited in the templates) · <a href="https://www.iso.org" target="_blank" rel="noopener">iso.org</a> · <a href="https://www.astm.org" target="_blank" rel="noopener">astm.org</a></dd>'+
    '<dt>Product references</dt><dd><a href="https://asana.com" target="_blank" rel="noopener">asana.com</a> · <a href="https://monday.com" target="_blank" rel="noopener">monday.com</a> · for structured experimental data: <a href="https://www.benchling.com" target="_blank" rel="noopener">Benchling</a>, <a href="https://www.scinote.net" target="_blank" rel="noopener">SciNote</a> (LabPM does not replace an ELN)</dd></dl>'+
    '<p><b>AI disclosure:</b> this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).</p></section>'+
    '<section class="card"><details class="lic"><summary>License text</summary><pre>POLYFORM NONCOMMERCIAL LICENSE 1.0.0\n\nCopyright (c) 2026 Flavio Pendolino\nAll rights reserved.\nCommercial use requires a separate license: penfla@me.com\n\n--- ACCEPTANCE ---\nIn order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.\n\n--- COPYRIGHT LICENSE ---\nThe licensor grants you a copyright license for the software to do everything you might do with the software that is not commercial use or a use closely related to commercial use, for any term of years.\n\n--- NONCOMMERCIAL PURPOSES ---\nNoncommercial purposes include personal use, educational use, and research use. Noncommercial purposes do not include any purpose primarily intended for or directed toward commercial advantage or monetary compensation, or any use by any legal entity primarily engaged in the business of providing goods or services of the kind provided by the software or a closely related kind.\n\n--- COVENANTS (Copyleft) ---\nYou may not allow any third party to benefit from the grants of this license without enforcing all terms of this license as conditions for those grants.\n\n--- NOTICES ---\nEnsure all copies of the software include all copyright, patent, trademark, and attribution notices from the source you received them.\n\n--- COMMERCIALIZATION ---\nYou may not commercialize the software, meaning you may not grant licenses to use the software or distribute the software for a fee, nor may you otherwise seek monetary compensation in connection with the software.\n\n--- NO LIABILITY ---\nAs far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.\n\nFull license text: https://polyformproject.org/licenses/noncommercial/1.0.0/</pre></details></section>'}
 
 /* ---------- session ---------- */
-function vSession(){
-  var snaps=getSnaps(),ad=isAdmin(),cs=S.ui.confirmSnap;
-  var fmt=function(ts){return new Date(ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})};
-  var rows=snaps.map(function(s){var d=s.data||{};
-    return '<tr><td><b>'+esc(s.name)+'</b>'+(s.auto?' <span class="tag">automatic</span>':'')+'</td><td class="mono small">'+fmt(s.ts)+'</td><td class="mono small">'+(Array.isArray(d.projects)?d.projects.length:0)+' projects · '+(Array.isArray(d.tasks)?d.tasks.length:0)+' tasks</td><td><div class="row" style="justify-content:flex-end"><button class="btn sm'+(cs===s.id?' pri':'')+'" data-act="snaprestore" data-id="'+esc(s.id)+'"'+(ad?'':' disabled')+'>'+(cs===s.id?'Confirm restore':'Restore')+'</button><button class="btn sm dng" data-act="snapdel" data-id="'+esc(s.id)+'">'+(cs==='d:'+s.id?'Confirm':'Delete')+'</button></div></td></tr>'}).join('');
-  return '<div class="sgrid">'+
-   '<section class="card"><h2>Autosave</h2><p style="margin:0 0 8px">'+esc(savedText())+'</p><p class="small muted" style="margin:0">Every change is written to this browser’s storage. It is not shared with other devices or people and the browser may clear it: for a reliable backup, save to a file.</p></section>'+
-   '<section class="card"><h2>Save the session</h2><div class="form"><label class="full">Name<input id="ss-name" placeholder="E.g. Campaign 03, end of week" maxlength="80"></label>'+
-   '<label class="full"><span class="row" style="flex-wrap:wrap"><button class="btn pri" data-act="snapsave">Save in browser</button><button class="btn" data-act="savefile">Save to file (.json)</button></span></label></div>'+
-   '<p class="small muted" style="margin:10px 0 0">The session includes projects, tasks, hours, documents, rules, fields, people and settings. Up to '+MAXSNAP+' sessions in the browser; the file is for moving your work to another computer.</p></section></div>'+
-   vFolder()+vEmpty()+
-   '<section class="card"><h2>Sessions saved in the browser</h2>'+(rows?'<div class="tbw"><table class="tbl" style="min-width:600px"><thead><tr><th>Name</th><th>Saved</th><th>Content</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p class="muted">No saved sessions. Use "Save in browser" to create one.</p>')+
-   '<p class="small muted" style="margin:10px 0 0">Restoring replaces the current data (Admin only) and first creates an automatic copy. Running timers are not restored.</p></section>'+
-   '<section class="card"><h2>Open from file</h2><div class="form"><label class="full">Session file (.json)<input type="file" id="sf" accept=".json,application/json" data-ch="openfile"'+(ad?'':' disabled')+'></label></div>'+
-   '<p class="small muted" style="margin:10px 0 0">'+(ad?'Open a previously saved file. Current data is replaced after an automatic copy.':'Only the Admin role can open a session from file.')+'</p>'+
-   '<details class="lic" style="margin-top:10px"><summary>Alternative: copy and paste the JSON</summary><div class="tools" style="margin:8px 0"><button class="btn" data-act="copyjson">Copy session</button><button class="btn" data-act="impjson"'+(ad?'':' disabled')+'>Import from field</button></div><textarea id="jb" rows="4" placeholder="Paste a session JSON here"></textarea></details></section>'}
+function vSession(){var ad=isAdmin();
+  return '<div class="sgrid"><section class="card"><h2>Sync</h2><p style="margin:0 0 8px" id="sv2">'+esc(savedText())+'</p><p class="small muted" style="margin:0">All changes are written to the central server and appear in other open sessions within seconds. Roles are enforced by the server.</p></section>'+
+   '<section class="card"><h2>Account</h2><p style="margin:0 0 8px">Signed in as <b>'+esc(me().name)+'</b> ('+esc(me().role)+')</p><div class="form"><label>Current password<input type="password" id="pw-c" autocomplete="current-password"></label><label>New password (10+ characters)<input type="password" id="pw-n" autocomplete="new-password"></label><label class="full"><button class="btn" data-act="chpw" style="width:max-content">Change password</button></label></div></section></div>'+
+   '<section class="card"><h2>Export and import (Admin)</h2><div class="tools"><button class="btn" data-act="exportdb"'+(ad?'':' disabled')+'>Download full database (.json)</button></div>'+
+   '<div class="form" style="margin-top:10px"><label class="full">Import a LabPM session file (.json, schema v1)<input type="file" accept=".json,application/json" data-ch="openfile"'+(ad?'':' disabled')+'></label><label class="full"><span class="row"><input type="checkbox" id="imp-u"> Import people as placeholders (no login; Admin role becomes Viewer)</span></label></div>'+
+   '<p class="small muted" style="margin:10px 0 0">Import adds or overwrites records with the same id; nothing is deleted. Running timers are not imported.</p></section>'+vEmpty()}
 
 /* ---------- task detail ---------- */
 function renderDrawer(){
@@ -658,7 +625,6 @@ function renderDrawer(){
    (ro?'':'<div class="row"><input type="number" id="lg-h" min="0" step="0.25" placeholder="hours" style="width:80px"><input id="lg-n" placeholder="note" class="grow"><button class="btn sm" data-act="addlog" data-id="'+t.id+'">Add</button></div>')+
    '<div class="lst small">'+t.log.slice(-8).reverse().map(function(l){return '<div><span><span class="mono">'+fd(l.date)+'</span> · '+esc(uname(l.u))+' · <b class="mono">'+nf(l.h,2)+' h</b> '+esc(l.note||'')+'</span>'+(ro?'':'<button class="btn sm" data-act="dellog" data-id="'+t.id+'" data-lid="'+l.id+'">×</button>')+'</div>'}).join('')+'</div></div>'+
    '<div class="sec"><h3>Notes</h3><textarea rows="3" data-ch="dr" data-f="notes"'+dis+'>'+esc(t.notes)+'</textarea></div>'+
-   attSec(t,ro)+
    '<div class="sec"><h3>Documents</h3>'+(docs.map(function(d){return '<div><a href="#" data-act="docsel" data-id="'+d.id+'" data-go="1">'+esc(d.title)+'</a></div>'}).join('')||'<span class="muted small">No linked documents.</span>')+(isPM()||role()==='Researcher'?'<button class="btn sm" data-act="docnew" data-task="'+t.id+'" style="width:max-content">New document for this task</button>':'')+'</div>'+
    (isPM()?'<div class="sec"><button class="btn dng" data-act="'+(S.ui.confirmDel===t.id?'deltask2':'deltask')+'" data-id="'+t.id+'" style="width:max-content">'+(S.ui.confirmDel===t.id?'Confirm deletion':'Delete task')+'</button></div>':'')+
    '</div></div>';
@@ -705,92 +671,24 @@ function buildXlsx(tasks,info){
    ['xl/_rels/workbook.xml.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
    ['xl/styles.xml',X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy\\-mm\\-dd"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD6ECEF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
    ['xl/worksheets/sheet1.xml',ws1],['xl/worksheets/sheet2.xml',ws2]])}
-/* save a Blob: native "Save as" dialog (starts in the backup folder if connected) or plain download */
+/* save a Blob: native "Save as" dialog or plain download */
 function saveBlob(blob,fn,desc,ext,mime){
-  if(typeof window.showSaveFilePicker==='function'){var o={suggestedName:fn,types:[{description:desc,accept:{[mime]:[ext]}}]};if(FS.h)o.startIn=FS.h;
+  if(typeof window.showSaveFilePicker==='function'){var o={suggestedName:fn,types:[{description:desc,accept:{[mime]:[ext]}}]};
     return window.showSaveFilePicker(o).then(function(h){return h.createWritable().then(function(w){return w.write(blob).then(function(){return w.close()})})}).then(function(){return true},function(er){if(er&&er.name==='AbortError')return false;return dl(blob,fn)})}
   return Promise.resolve(dl(blob,fn))}
 function dl(blob,fn){var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url)},1000);return true}
 function exportTasks(){var ts=filtered().slice().sort(function(a,b){var pa=S.projects.indexOf(P(a.projectId)),pb=S.projects.indexOf(P(b.projectId));return pa!==pb?pa-pb:(a.start<b.start?-1:a.start>b.start?1:0)}),u=S.ui;
   if(!ts.length){toast('No tasks match the filters: nothing to export.');return}
   var pn=u.fp?(P(u.fp)||{}).name:'All',an=u.fa==='_'?'Unassigned':u.fa?uname(u.fa):'Everyone';
-  var info=[['Application','LabPM v1.3'],['Exported at',new Date().toLocaleString('en-GB')],['Exported by',me().name+' ('+me().role+')'],['Rows',{n:ts.length}],['',''],['Filter','Value'],['Search',u.q||'(none)'],['Project',pn],['Assignee',an],['Status',u.fs||'All'],['Priority',u.fpr||'All'],['Due from',u.fdf||'(none)'],['Due to',u.fdt||'(none)']];
+  var info=[['Application','LabPM v2.0'],['Exported at',new Date().toLocaleString('en-GB')],['Exported by',me().name+' ('+me().role+')'],['Rows',{n:ts.length}],['',''],['Filter','Value'],['Search',u.q||'(none)'],['Project',pn],['Assignee',an],['Status',u.fs||'All'],['Priority',u.fpr||'All'],['Due from',u.fdf||'(none)'],['Due to',u.fdt||'(none)']];
   var fn='labpm-tasks-'+TODAY()+'.xlsx';
   saveBlob(buildXlsx(ts,info),fn,'Excel workbook','.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').then(function(ok){if(ok){log('Exported '+ts.length+' tasks to Excel');save();toast('Exported '+ts.length+' tasks to '+fn)}})}
 
-/* ---------- backup folder (File System Access API, Chromium) ---------- */
-var FSOK=typeof window.showDirectoryPicker==='function';
-var FS={h:null,pending:null,on:false,err:'',last:0,timer:null,q:Promise.resolve()};
-function idbDo(mode,fn){return new Promise(function(res,rej){var r=indexedDB.open('labpm_fs',1);r.onupgradeneeded=function(){r.result.createObjectStore('h')};r.onerror=function(){rej(r.error)};r.onsuccess=function(){try{var tx=r.result.transaction('h',mode),q=fn(tx.objectStore('h'));tx.oncomplete=function(){res(q&&q.result)};tx.onerror=function(){rej(tx.error)}}catch(e){rej(e)}}})}
-var stamp=function(){var d=new Date();return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())};
-function fsWrite(h,name,txt){return h.getFileHandle(name,{create:true}).then(function(fh){return fh.createWritable()}).then(function(w){return w.write(txt).then(function(){return w.close()})})}
-function folderInit(){if(!FSOK)return;
-  idbDo('readonly',function(st){return st.get('dir')}).then(function(h){if(!h)return;
-    var on=true;try{on=localStorage.getItem('labpm_fs_on')!=='0'}catch(e){}
-    return h.queryPermission({mode:'readwrite'}).then(function(p){if(p==='granted'){FS.h=h;FS.on=on;folderNow(false)}else{FS.pending=h}})}).catch(function(){}).then(function(){if(S.ui.view==='session')renderBody()})}
-function folderSchedule(){if(!FS.h||!FS.on)return;clearTimeout(FS.timer);FS.timer=setTimeout(function(){folderNow(false)},800)}
-function folderNow(copy){if(!FS.h)return Promise.resolve();var h=FS.h,txt=JSON.stringify(snapData(),null,1);
-  FS.q=FS.q.then(function(){return fsWrite(h,'labpm-autosave.json',txt)}).then(function(){if(copy)return fsWrite(h,'labpm-copy-'+stamp()+'.json',txt)}).then(function(){FS.err='';FS.last=Date.now()},function(er){FS.err=(er&&er.message)||'write failed';FS.on=false}).then(function(){var el=document.getElementById('sv');if(el)el.textContent=savedText();if(S.ui.view==='session')renderBody();if(FS.err)toast('Folder autosave stopped: '+FS.err)});
-  return FS.q}
-function folderConnect(h){FS.h=h;FS.pending=null;FS.on=true;FS.err='';try{localStorage.setItem('labpm_fs_on','1')}catch(e){}
-  idbDo('readwrite',function(st){return st.put(h,'dir')}).catch(function(){});
-  /* snapshot of the database as it is BEFORE any further editing, then continuous autosave */
-  var txt=JSON.stringify(snapData(),null,1);
-  return fsWrite(h,'labpm-initial-'+stamp()+'.json',txt).then(function(){return folderNow(false)}).then(function(){log('Backup folder connected: '+h.name);save();toast('Initial copy saved in "'+h.name+'". Autosave is on.')},function(er){FS.err=(er&&er.message)||'write failed';FS.on=false;toast('Cannot write to folder: '+FS.err)}).then(function(){renderBody()})}
-function vFolder(){var h='<section class="card"><h2>Backup folder (autosave every change)</h2>';
-  if(!FSOK)return h+'<p class="muted" style="margin:0">Folder access is not available in this browser (it needs a Chromium-based browser such as Chrome or Edge). Use <b>Save to file</b> above to keep a backup.</p></section>';
-  var st,btn='';
-  if(FS.h){st=FS.err?'<span class="flag bad">error</span> '+esc(FS.err):FS.on?'<span class="flag good">on</span> Writing <span class="mono">labpm-autosave.json</span> in <b>'+esc(FS.h.name)+'</b> after every change'+(FS.last?' (last write '+hhmm(FS.last)+')':'')+'.':'<span class="flag warn">paused</span> Folder <b>'+esc(FS.h.name)+'</b> is connected but autosave is paused.';
-    btn='<button class="btn pri" data-act="foldernow">Save timestamped copy now</button><button class="btn" data-act="foldertoggle">'+(FS.on?'Pause autosave':'Resume autosave')+'</button><button class="btn" data-act="foldersel">Change folder…</button><button class="btn dng" data-act="foldernone">Disconnect</button>'}
-  else if(FS.pending){st='Folder <b>'+esc(FS.pending.name)+'</b> was used before. The browser needs your permission again.';btn='<button class="btn pri" data-act="folderre">Reconnect folder</button><button class="btn" data-act="foldersel">Choose another folder…</button>'}
-  else{st='Not connected. Choose a folder <b>before you start entering data</b>: an initial copy of the current database is written there, then every change is saved automatically.';btn='<button class="btn pri" data-act="foldersel">Choose folder…</button>'}
-  return h+'<p style="margin:0 0 10px">'+st+'</p><div class="tools">'+btn+'</div><p class="small muted" style="margin:10px 0 0">Files: <span class="mono">labpm-initial-&lt;date&gt;.json</span> (copy at connection), <span class="mono">labpm-autosave.json</span> (always the latest state), <span class="mono">labpm-copy-&lt;date&gt;.json</span> (manual copies). They are plain, unencrypted JSON: choose a folder with appropriate access control. Reopen any of them with <i>Open from file</i>. The browser asks permission again after a restart.</p></section>'}
-
-
-/* ---------- attachments (copied into <backup folder>/attachments/...) ---------- */
-var fsz=function(n){return n<1024?n+' B':n<1048576?nf(n/1024,1)+' KB':nf(n/1048576,1)+' MB'};
-var safeName=function(n){n=String(n||'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').replace(/^[.\s]+|[.\s]+$/g,'');return (n||'file').slice(0,120)};
-var slug=function(n){return String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'x'};
-function attDir(taskId,projectId){var t=taskId&&T(taskId),p=P(projectId||(t&&t.projectId));
-  return t?'task-'+slug(t.title)+'-'+t.id:'project-'+slug(p&&p.name)+'-'+(p?p.id:'none')}
-var canAttach=function(taskId){var t=taskId&&T(taskId);return t?canEdit(t):isPM()};
-function attPerm(){if(!FS.h)return Promise.reject(new Error(FS.pending?'Reconnect the backup folder first (Session page).':'Connect a backup folder first (Session page): attachments are stored next to the database.'));
-  return FS.h.queryPermission({mode:'readwrite'}).then(function(p){return p==='granted'?p:FS.h.requestPermission({mode:'readwrite'})}).then(function(p){if(p!=='granted')throw new Error('Folder permission not granted.')})}
-async function attachFiles(list,taskId,projectId){
-  if(!list.length)return;
-  if(!canAttach(taskId)){toast('Your role cannot attach files here.');return}
-  var t=taskId&&T(taskId),pid=projectId||(t&&t.projectId)||'';
-  if(!t&&!P(pid)){toast('Choose a project first.');return}
-  try{await attPerm();
-    var root=await FS.h.getDirectoryHandle('attachments',{create:true}),dn=attDir(taskId,pid),sub=await root.getDirectoryHandle(dn,{create:true}),n=0;
-    for(var i=0;i<list.length;i++){var f=list[i],base=safeName(f.name),nm=base,k=1;
-      for(;;){try{await sub.getFileHandle(nm);k++;var dot=base.lastIndexOf('.');nm=dot>0?base.slice(0,dot)+' ('+k+')'+base.slice(dot):base+' ('+k+')'}catch(e){if(e&&e.name==='NotFoundError')break;throw e}}
-      var fh=await sub.getFileHandle(nm,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
-      S.files.push({id:uid('a'),taskId:taskId||'',projectId:pid,name:nm,path:'attachments/'+dn+'/'+nm,size:f.size,type:f.type||'',added:Date.now(),by:S.me});n++;
-      log('Attached "'+nm+'"'+(t?' to "'+t.title+'"':' to project "'+(P(pid)||{}).name+'"'))}
-    toast(n+' file(s) copied to "'+FS.h.name+'/attachments/'+dn+'".');commit()}
-  catch(er){toast('Attachment failed: '+((er&&er.message)||er));commit()}}
-async function fileGet(rec){var parts=String(rec.path).split('/');
-  if(!FS.h)throw new Error(FS.pending?'Reconnect the backup folder first (Session page).':'Backup folder not connected.');
-  if(parts.length<3||parts[0]!=='attachments'||parts.some(function(x){return !x||x==='.'||x==='..'}))throw new Error('Invalid attachment path.');
-  await attPerm();var d=FS.h;for(var i=0;i<parts.length-1;i++)d=await d.getDirectoryHandle(parts[i]);
-  return (await d.getFileHandle(parts[parts.length-1])).getFile()}
-function fileRows(list,ro,ctx){return list.map(function(f){var t=f.taskId&&T(f.taskId),p=P(f.projectId);
-  return '<div><span class="grow" style="flex:1;min-width:0"><b>'+esc(f.name)+'</b> <span class="muted small mono">'+fsz(f.size)+' · '+fd(new Date(f.added).toISOString().slice(0,10))+' · '+esc(uname(f.by))+'</span>'+(ctx?'<br><span class="small muted">'+pdot(p)+esc(p?p.name:'—')+(t?' › '+esc(t.title):' › (project)')+'</span>':'')+'<br><span class="small muted mono">'+esc(f.path)+'</span></span><span class="row"><button class="btn sm" data-act="fopen" data-id="'+f.id+'">Open</button><button class="btn sm" data-act="fsave" data-id="'+f.id+'">Save copy</button>'+(canAttach(f.taskId)?'<button class="btn sm dng" data-act="frm" data-id="'+f.id+'" title="Removes the link only; the file stays in the folder">Remove</button>':'')+'</span></div>'}).join('')}
-function attSec(t,ro){var fl=S.files.filter(function(f){return f.taskId===t.id});
-  return '<div class="sec"><h3>Attachments</h3>'+(fl.length?'<div class="lst">'+fileRows(fl,ro,false)+'</div>':'<span class="muted small">No attachments.</span>')+
-   (ro?'':(FS.h?'<label class="small muted" style="display:flex;flex-direction:column;gap:3px">Add files (copied to <span class="mono">'+esc(FS.h.name)+'/attachments/</span>)<input type="file" multiple data-ch="attach" data-task="'+t.id+'"></label>':'<span class="small muted">Connect a backup folder on the Session page to enable attachments: files are copied next to the database.</span>'))+'</div>'}
-function vFiles(){var u=S.ui,pid=u.fpj&&P(u.fpj)?u.fpj:(S.projects[0]?S.projects[0].id:''),tk=u.ftk&&T(u.ftk)&&T(u.ftk).projectId===pid?u.ftk:'',can=canAttach(tk)&&!!pid;
-  var list=S.files.filter(function(f){return !u.ffp||f.projectId===u.ffp}).sort(function(a,b){return b.added-a.added});
-  var head='<section class="card"><h2>Add files</h2>';
-  if(!FS.h)head+='<p style="margin:0 0 10px">'+(FS.pending?'The backup folder <b>'+esc(FS.pending.name)+'</b> needs your permission again.':'No backup folder connected.')+' Attachments are copied into an <span class="mono">attachments</span> subfolder of the folder that holds the database, so a folder must be connected first.</p><button class="btn pri" data-act="nav" data-v="session">Go to Session → Backup folder</button></section>';
-  else head+='<div class="form"><label>Project<select data-ch="fpj">'+opt(pOpts(),pid)+'</select></label><label>Task<select data-ch="ftk">'+opt([['','— project-level file —']].concat(S.tasks.filter(function(t){return t.projectId===pid}).map(function(t){return [t.id,t.title]})),tk)+'</select></label><label class="full">Files<input type="file" multiple data-ch="attach" data-task="'+esc(tk)+'" data-proj="'+esc(pid)+'"'+(can?'':' disabled')+'></label></div><p class="small muted" style="margin:10px 0 0">'+(can?'':'Your role cannot attach files here. ')+'Destination: <span class="mono">'+esc(FS.h.name)+'/attachments/'+esc(pid?attDir(tk,pid):'…')+'/</span>. Files are copied (not moved); existing names get a numeric suffix. Removing an attachment only removes the link: the file stays in the folder.</p></section>';
-  return head+'<section class="card"><h2>All attachments</h2><div class="tools" style="margin-bottom:10px"><select data-ch="ffp" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),u.ffp)+'</select><span class="small muted">'+list.length+' file(s)</span></div>'+(list.length?'<div class="lst">'+fileRows(list,false,true)+'</div>':'<p class="muted" style="margin:0">No attachments yet.</p>')+'</section>'}
 /* ---------- empty database / clear ---------- */
 function emptySession(){var f=function(id,name,type,x){var o={id:id,name:name,type:type};if(type==='select')o.options=x;if(type==='formula')o.formula=x;return o};
   return {v:1,me:'u1',users:[{id:'u1',name:'Admin',role:'Admin',cap:40}],projects:[],tasks:[],fields:[f('f1','Instrument','select',TOOLS.slice()),f('f2','No. of samples','number'),f('f3','Lot','text'),f('f4','Hours per sample','formula','{est}/{No. of samples}')],rules:[],goals:[],docs:[],files:[],activity:[],ui:defaultUI(),demo:false}}
 function vEmpty(){var ad=isAdmin(),c=S.ui.confirmClear;
-  return '<section class="card"><h2>Empty database</h2><div class="tools"><button class="btn" data-act="emptyfile">Download empty database file</button><button class="btn dng" data-act="clearall"'+(ad?'':' disabled')+'>'+(c?'Confirm: delete ALL projects, tasks, documents, rules':'Clear all project data')+'</button>'+(c?'<button class="btn" data-act="clearcancel">Cancel</button>':'')+'</div><p class="small muted" style="margin:10px 0 0">The empty file (<span class="mono">labpm-empty.json</span>) has no projects or tasks, one Admin user and the default custom fields; open it with <i>Open from file</i> (Admin). <b>Clear all project data</b> (Admin) deletes projects, tasks, hours, goals, documents, rules, attachment links and the activity log, and keeps people, roles and custom fields. Before clearing, an automatic browser snapshot is taken and, if a backup folder is connected, a copy is written there. Files already copied to the <span class="mono">attachments</span> folder are never deleted.</p></section>'}
+  return '<section class="card"><h2>Empty database</h2><div class="tools"><button class="btn" data-act="emptyfile">Download empty database file</button><button class="btn dng" data-act="clearall"'+(ad?'':' disabled')+'>'+(c?'Confirm: delete ALL projects, tasks, documents, rules':'Clear all project data')+'</button>'+(c?'<button class="btn" data-act="clearcancel">Cancel</button>':'')+'</div><p class="small muted" style="margin:10px 0 0">The empty file has no projects or tasks and the default custom fields; import it above. <b>Clear all project data</b> (Admin) deletes projects, tasks, hours, goals, documents and rules for everyone, and keeps people, roles and custom fields. Download the full database first: this cannot be undone.</p></section>'}
 
 /* ---------- actions ---------- */
 function defVal(type){return {status_to:'Done',set_status:'In progress',priority:'High',set_priority:'High',project:S.projects[0]?S.projects[0].id:'',set_assignee:''}[type]||''}
@@ -801,32 +699,12 @@ function download(txt,label){var done=function(){toast(label+' copied to clipboa
 var A={
  nav:function(e){go(e.dataset.v)},
  theme:function(e){S.ui.theme=e.dataset.v;applyTheme();save();render();renderDrawer()},
- snapsave:function(){var nm=($('#ss-name').value||'').trim()||('Session of '+new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}));
-  var a=getSnaps();a.unshift({id:uid('s'),name:nm,ts:Date.now(),data:snapData()});var cut=a.length>MAXSNAP;if(cut)a.length=MAXSNAP;
-  if(!putSnaps(a)){toast('Browser storage full: save to a file.');return}
-  log('Session saved: '+nm);save();toast(cut?'Session saved; the oldest was removed (max '+MAXSNAP+').':'Session saved in the browser.');renderBody()},
- snaprestore:function(e){if(!isAdmin())return;var id=e.dataset.id;if(S.ui.confirmSnap!==id){S.ui.confirmSnap=id;renderBody();return}
-  var s=getSnaps().find(function(x){return x.id===id}),o=null;if(!s)return;try{o=normSession(JSON.parse(JSON.stringify(s.data)))}catch(x){}
-  if(!o){toast('Saved session is not valid.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session restored: '+s.name)},
- snapdel:function(e){var id=e.dataset.id;if(S.ui.confirmSnap!=='d:'+id){S.ui.confirmSnap='d:'+id;renderBody();return}putSnaps(getSnaps().filter(function(s){return s.id!==id}));S.ui.confirmSnap=null;renderBody()},
- savefile:function(){var txt=JSON.stringify(snapData(),null,1),fn='labpm-session-'+TODAY()+'.json';
-  try{var bl=new Blob([txt],{type:'application/json'}),url=URL.createObjectURL(bl),a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url)},1000);toast('Session saved to file.')}
-  catch(x){download(txt,'Session JSON')}},
  xlsx:function(){exportTasks()},
  clearf:function(){var u=S.ui;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';save();renderBody()},
- foldersel:function(){window.showDirectoryPicker({mode:'readwrite',id:'labpm',startIn:'documents'}).then(folderConnect,function(er){if(!er||er.name!=='AbortError')toast('Cannot open folder: '+((er&&er.message)||'denied'))})},
- folderre:function(){var h=FS.pending;if(!h)return;h.requestPermission({mode:'readwrite'}).then(function(p){if(p==='granted')return folderConnect(h);toast('Permission not granted.')},function(){toast('Permission not granted.')})},
- foldernow:function(){folderNow(true).then(function(){if(!FS.err)toast('Copy saved in "'+FS.h.name+'".')})},
- foldertoggle:function(){FS.on=!FS.on;FS.err='';try{localStorage.setItem('labpm_fs_on',FS.on?'1':'0')}catch(e){}if(FS.on)folderNow(false);renderBody();var el=document.getElementById('sv');if(el)el.textContent=savedText()},
- foldernone:function(){FS.h=null;FS.pending=null;FS.on=false;FS.err='';idbDo('readwrite',function(st){return st.delete('dir')}).catch(function(){});renderBody();var el=document.getElementById('sv');if(el)el.textContent=savedText()},
  emptyfile:function(){var blob=new Blob([JSON.stringify(emptySession(),null,1)],{type:'application/json'});saveBlob(blob,'labpm-empty.json','LabPM database','.json','application/json').then(function(ok){if(ok)toast('Empty database file saved.')})},
  clearall:function(){if(!isAdmin())return;if(!S.ui.confirmClear){S.ui.confirmClear=true;renderBody();return}
-  autoSnap();var wipe=function(){S.projects=[];S.tasks=[];S.goals=[];S.docs=[];S.rules=[];S.files=[];S.activity=[];S.demo=false;var u=S.ui;u.drawer=null;u.confirmClear=false;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';u.fpj='';u.ftk='';u.ffp='';u.doc=null;u.ap=null;u.tpl=null;log('All project data cleared');save();render();renderDrawer();toast('All project data cleared (snapshot saved in Session).')};
-  (FS.h&&FS.on?folderNow(true):Promise.resolve()).then(wipe)},
+  S.projects=[];S.tasks=[];S.goals=[];S.docs=[];S.rules=[];S.activity=[];var u=S.ui;u.drawer=null;u.confirmClear=false;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';u.doc=null;u.ap=null;u.tpl=null;log('All project data cleared');save();render();renderDrawer();toast('All project data cleared.')},
  clearcancel:function(){S.ui.confirmClear=false;renderBody()},
- fopen:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;fileGet(f).then(function(file){var url=URL.createObjectURL(file);if(!window.open(url,'_blank','noopener'))dl(file,f.name);setTimeout(function(){URL.revokeObjectURL(url)},60000)},function(er){toast((er&&er.name==='NotFoundError')?'File not found in the folder (moved or deleted?).':((er&&er.message)||'Cannot open file.'))})},
- fsave:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;fileGet(f).then(function(file){dl(file,f.name)},function(er){toast((er&&er.name==='NotFoundError')?'File not found in the folder (moved or deleted?).':((er&&er.message)||'Cannot read file.'))})},
- frm:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f||!canAttach(f.taskId))return;S.files=S.files.filter(function(x){return x.id!==f.id});log('Attachment link removed: '+f.name);toast('Link removed; "'+f.name+'" stays in the folder.');commit()},
  tview:function(e){S.ui.tview=e.dataset.v;save();renderBody()},
  open:function(e){S.ui.drawer=e.dataset.id;S.ui.confirmDel=null;renderDrawer()},
  close:function(){S.ui.drawer=null;S.ui.confirmDel=null;renderDrawer()},
@@ -840,7 +718,7 @@ var A={
  addlog:function(e){var t=T(e.dataset.id),h=parseFloat($('#lg-h').value);if(!t||!canEdit(t))return;if(!(h>0)){toast('Enter hours (greater than zero).');return}t.log.push({id:uid('l'),u:S.me,date:TODAY(),h:h,note:$('#lg-n').value.trim()});log('Hours on "'+t.title+'": '+nf(h,2));commit()},
  dellog:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;t.log=t.log.filter(function(l){return l.id!==e.dataset.lid});commit()},
  deltask:function(e){S.ui.confirmDel=e.dataset.id;renderDrawer()},
- deltask2:function(e){var id=e.dataset.id,t=T(id);if(!t||!isPM())return;S.tasks=S.tasks.filter(function(x){return x.id!==id});S.tasks.forEach(function(x){x.deps=x.deps.filter(function(d){return d!==id})});var nf2=S.files.filter(function(f){return f.taskId===id}).length;S.files=S.files.filter(function(f){return f.taskId!==id});log('Deleted "'+t.title+'"');if(nf2)toast(nf2+' attachment link(s) removed; the files stay in the attachments folder.');S.ui.drawer=null;S.ui.confirmDel=null;commit()},
+ deltask2:function(e){var id=e.dataset.id,t=T(id);if(!t||!isPM())return;S.tasks=S.tasks.filter(function(x){return x.id!==id});S.tasks.forEach(function(x){x.deps=x.deps.filter(function(d){return d!==id})});log('Deleted "'+t.title+'"');S.ui.drawer=null;S.ui.confirmDel=null;commit()},
  docsel:function(e,ev){if(ev)ev.preventDefault();S.ui.doc=e.dataset.id;if(e.dataset.go){S.ui.view='docs';S.ui.drawer=null;save();render();renderDrawer()}else{save();renderBody()}},
  docnew:function(e){var d={id:uid('d'),title:'New document',projectId:'',taskId:e.dataset.task||'',updated:Date.now(),body:'# Title\n\n'};if(d.taskId){var t=T(d.taskId);d.projectId=t.projectId;d.title='Notes: '+t.title}S.docs.push(d);S.ui.doc=d.id;S.ui.view='docs';S.ui.drawer=null;log('Nuovo documento "'+d.title+'"');save();render();renderDrawer()},
  docdel:function(e){S.docs=S.docs.filter(function(d){return d.id!==e.dataset.id});S.ui.doc=null;save();renderBody()},
@@ -873,24 +751,24 @@ var A={
  fieldadd:function(){var n=$('#nf-n').value.trim(),ty=$('#nf-t').value,x=$('#nf-x').value.trim();if(!n){toast('Enter the field name.');return}if(ty==='formula'&&!x){toast('Write the formula.');return}
   var f={id:uid('f'),name:n,type:ty};if(ty==='select')f.options=x?x.split(',').map(function(s){return s.trim()}).filter(Boolean):['A','B'];if(ty==='formula')f.formula=x;S.fields.push(f);log('New field "'+n+'"');save();renderBody()},
  fielddel:function(e){S.fields=S.fields.filter(function(f){return f.id!==e.dataset.id});save();renderBody()},
- useradd:function(){var n=$('#nu-n').value.trim();if(!n){toast('Enter the name.');return}S.users.push({id:uid('u'),name:n,role:$('#nu-r').value,cap:40});log('New person "'+n+'"');save();renderBody()},
+ useradd:function(){var n=$('#nu-n').value.trim(),un=$('#nu-u').value.trim(),pw=$('#nu-p').value;if(!n||!un){toast('Enter name and username.');return}api('POST','/api/accounts',{username:un,name:n,password:pw,role:$('#nu-r').value,cap:40}).then(function(r){if(r.s===201){S.users.push(r.j.user);REV['users/'+r.j.user.id]=1;SHADOW['users/'+r.j.user.id]=JSON.stringify(r.j.user);toast('Account created.');renderBody()}else toast(r.j.error||'Error '+r.s)})},
+ userpw:function(e){var pw=prompt('New password for '+uname(e.dataset.id)+' (10+ characters):');if(!pw)return;api('POST','/api/accounts/'+e.dataset.id+'/password',{password:pw}).then(function(r){toast(r.s===200?'Password changed; the user was signed out.':(r.j.error||'Error'))})},
+ logout:function(){api('POST','/api/logout',{}).then(function(){showLogin()})},
+ chpw:function(){api('POST','/api/password',{current:$('#pw-c').value,password:$('#pw-n').value}).then(function(r){toast(r.s===200?'Password changed.':(r.j.error||'Error'));if(r.s===200){$('#pw-c').value='';$('#pw-n').value=''}})},
+ exportdb:function(){if(!isAdmin())return;api('GET','/api/export').then(function(r){if(r.s!==200){toast(r.j.error||'Error');return}dl(new Blob([JSON.stringify(r.j,null,1)],{type:'application/json'}),'labpm-database-'+TODAY()+'.json');toast('Database exported.')})},
  userdel:function(e){S.tasks.forEach(function(t){if(t.assignee===e.dataset.id)t.assignee=null});S.users=S.users.filter(function(u){return u.id!==e.dataset.id});save();renderBody()},
  copyics:function(){var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LabPM//EN'],z=function(s){return String(s).replace(/[\\;,]/g,function(c){return '\\'+c})};
   S.tasks.filter(function(t){return t.status!=='Done'}).forEach(function(t){L.push('BEGIN:VEVENT','UID:'+t.id+'@labpm','DTSTAMP:'+iso(new Date()).replace(/-/g,'')+'T000000Z','DTSTART;VALUE=DATE:'+t.due.replace(/-/g,''),'SUMMARY:'+z(t.title+' ('+uname(t.assignee)+')'),'END:VEVENT')});L.push('END:VCALENDAR');download(L.join('\r\n'),'ICS calendar')},
- copyjson:function(){download(JSON.stringify(S),'JSON backup')},
- impjson:function(){if(!isAdmin())return;var o=null;try{o=normSession(JSON.parse($('#jb').value))}catch(x){}if(!o){toast('Invalid JSON: a LabPM session is required.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session imported.')},
- reset:function(){if(!isAdmin())return;if(!S.ui.confirmReset){S.ui.confirmReset=true;renderBody();return}autoSnap();S=seed();applyTheme();save();render();renderDrawer();toast('Sample data restored (automatic copy created).')}
+ copyjson:function(){download(JSON.stringify(S),'JSON backup')}
 };
 var H={
- openfile:function(e){var f=e.files&&e.files[0];if(!f)return;if(!isAdmin()){toast('Only Admin can open a session.');e.value='';return}
+ openfile:function(e){var f=e.files&&e.files[0];if(!f)return;if(!isAdmin()){toast('Only Admin can import.');e.value='';return}
   if(f.size>5e6){toast('File too large (max 5 MB).');e.value='';return}
-  var r=new FileReader();r.onload=function(){var o=null;try{o=normSession(JSON.parse(String(r.result)))}catch(x){}
-   if(!o){toast('Invalid file: a LabPM session is required.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session opened: '+f.name)};
+  var r=new FileReader();r.onload=function(){var o=null;try{o=JSON.parse(String(r.result))}catch(x){}if(!o||o.v!==1){toast('Invalid file: a LabPM session (v:1) is required.');return}
+   var wu=$('#imp-u')&&$('#imp-u').checked;api('POST','/api/import'+(wu?'?users=1':''),o).then(function(x){if(x.s===200){toast('Imported '+x.j.imported+' records.');loadState()}else toast(x.j.error||'Import failed')})};
   r.onerror=function(){toast('Unable to read the file.')};r.readAsText(f);e.value=''},
- me:function(e){S.me=e.value;S.ui.drawer=null;save();render();renderDrawer()},
  fp:function(e){S.ui.fp=e.value;save();renderBody()},fa:function(e){S.ui.fa=e.value;save();renderBody()},fs:function(e){S.ui.fs=e.value;save();renderBody()},
  group:function(e){S.ui.group=e.value;save();renderBody()},
- fpj:function(e){S.ui.fpj=e.value;S.ui.ftk='';save();renderBody()},ftk:function(e){S.ui.ftk=e.value;save();renderBody()},ffp:function(e){S.ui.ffp=e.value;save();renderBody()},
  attach:function(e){var l=Array.prototype.slice.call(e.files||[]),t=e.dataset.task||'',pj=e.dataset.proj||'';e.value='';attachFiles(l,t,pj)},
  fpr:function(e){S.ui.fpr=e.value;save();renderBody()},fdf:function(e){S.ui.fdf=e.value;save();renderBody()},fdt:function(e){S.ui.fdt=e.value;save();renderBody()},
  widget:function(e){S.ui.widgets[e.dataset.k]=e.checked?1:0;save();renderBody()},
@@ -932,10 +810,9 @@ document.addEventListener('dragleave',function(ev){var c=ev.target.closest('[dat
 document.addEventListener('drop',function(ev){var c=ev.target.closest('[data-drop]');if(!c)return;ev.preventDefault();c.classList.remove('over');var id=ev.dataTransfer.getData('text/plain'),t=T(id);if(!t)return;if(!canEdit(t)){toast('Your role cannot edit this task.');return}if(applyStatus(t,c.dataset.drop))save();renderBody()});
 
 /* ---------- startup ---------- */
-S=load()||seed();
-applyTheme();checkOverdue();save();render();renderDrawer();folderInit();
-setInterval(function(){var t=S.tasks.find(function(x){return x.timer&&x.timer.user===S.me}),b=$('#tbt');if(t&&b)b.textContent=elapsed(t)},1000);
-setInterval(function(){if(checkOverdue()){renderBody()}},60000);
+boot();
+setInterval(function(){if(!S)return;var t=S.tasks.find(function(x){return x.timer&&x.timer.user===S.me}),b=$('#tbt');if(t&&b)b.textContent=elapsed(t)},1000);
+setInterval(function(){if(S&&isPM()&&checkOverdue()){renderBody()}},60000);
 })();
 </script>
 </body>
