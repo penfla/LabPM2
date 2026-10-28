@@ -27,7 +27,7 @@ var T = { id: 't1', projectId: 'p1', title: 'DSC run PP-04', status: 'To do', pr
 
 test('two browsers: login, live update, role enforcement', { skip: !pw && 'playwright not installed', timeout: 120000 }, async function () {
   var attDir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'labpm-e2e-'));
-  var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir }), srv = a.server;
+  var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir, backupsDir: attDir }), srv = a.server;
   await new Promise(function (r) { srv.listen(0, '127.0.0.1', r); });
   var base = 'http://127.0.0.1:' + srv.address().port;
   var browser = await pw.chromium.launch();
@@ -64,6 +64,10 @@ test('two browsers: login, live update, role enforcement', { skip: !pw && 'playw
     await B.waitForSelector('text=dsc-report.txt', { timeout: 5000 });
     var body = await B.evaluate(function () { var h = document.querySelector('a[href*="/download"]').getAttribute('href'); return fetch(h).then(function (r) { return r.text(); }); });
     assert.strictEqual(body, 'Tm 165.2 C');
+    // Admin: backups card lists the copy made on demand
+    await A.click('[data-act=nav][data-v=session]');
+    await A.click('[data-act=bknow]');
+    await A.waitForSelector('[data-act=bkrestore]', { timeout: 5000 });
     // Viewer attempts a write through the API: forbidden server-side
     var s = await B.evaluate(function () { return fetch('/api/tasks/t1', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Done' }) }).then(function (r) { return r.status; }); });
     assert.strictEqual(s, 403);

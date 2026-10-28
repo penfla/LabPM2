@@ -1,14 +1,12 @@
-> **v2.0 status:** this text was written for v1.3 (standalone). Sections on browser storage, backup folder, snapshots, attachments in a local folder and simulated roles no longer apply; see `ARCHITECTURE-v2.md` and `CHANGELOG.md`.
-
 # User guide
 
-Applies to LabPM 1.3.0. Live demo / source: https://github.com/penfla/labpm
+Applies to LabPM 2.0.0-beta.1. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
-Left rail: **Work** (Dashboard, Tasks, Files, Requests) · **Planning** (Portfolio, Templates, Automations, Documents) · **System** (Session, Settings, Info & license). On screens ≤ 860 px the rail becomes a horizontal scroll bar.
+Left rail: **Work** (Dashboard, Tasks, Files, Requests) · **Planning** (Portfolio, Templates, Automations, Documents) · **System** (Data & sync, Settings, Info & license). On screens ≤ 860 px the rail becomes a horizontal scroll bar.
 
-Top bar: running-timer button (opens the task), theme (Light / Dark / Auto), **User** switcher (demo of roles; see §10).
+Top bar: running-timer button (opens the task), theme (Light / Dark / Auto), your name and role with **Sign out** (roles are enforced by the server; see §10).
 
 ## 2. Dashboard
 
@@ -57,14 +55,12 @@ Title, project, status, assignee (PM/Admin only), priority, start, due, estimate
 
 ## 3b. Files
 
-Side-menu page for attachments across projects.
+Attachments are stored on the server, in `attachments/` inside the data folder, and are visible to everyone who can see the task or project.
 
-1. Connect a backup folder first (*Session → Backup folder*). Without it the page only explains this: attachments are stored **inside the folder that holds the database**.
-2. Choose *Project*; optionally a *Task* (otherwise the file is project-level) and pick files (multiple). The destination path is shown: `<folder>/attachments/task-<slug>-<taskId>/` or `<folder>/attachments/project-<slug>-<projectId>/`.
-3. Files are copied, never moved. If the name already exists in that subfolder a suffix is added (`name (2).ext`); characters illegal in file names become `_`.
-4. *All attachments* lists everything (filter by project) with size, date, user and relative path. The *Attachments* column of the Excel export lists the file names per task.
-
-The relative path is stored in the database, so moving the whole folder (database + `attachments/`) to another computer keeps the links valid after you reconnect it. Deleting a task removes its links (a toast says so); files stay on disk. After a restart the browser asks permission again (*Reconnect folder*). Not supported without the File System Access API (Chromium).
+1. Choose *Project*; optionally a *Task* (otherwise the file is project-level) and pick files (multiple). Limit 25 MB per file (server setting `MAX_UPLOAD_MB`). The same upload control is in the task drawer.
+2. *Files* lists everything (filter by project) with size, date and user. Clicking a name downloads it; the download requires login and is always served as an attachment (never rendered in the page). Treat files as untrusted (macro-enabled Office files, etc.).
+3. Admin and Project manager can attach to any task and delete any file; a Researcher can attach to tasks assigned to them and delete files they added. Deleting a task deletes its files from the server.
+4. File names are sanitised (characters illegal in file names become `_`). The *Attachments* column of the Excel export lists the file names per task.
 
 ## 4. Requests (intake)
 
@@ -148,8 +144,9 @@ Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, ba
 - **Custom fields** — PM/Admin. Types: text, number, select (comma-separated options), date, checkbox, formula.
   - Formula: `+ − × ÷`, parentheses, decimals; variables `{est}`, `{logged}`, and the name of any *number* field, e.g. `{est}/{No. of samples}`. Missing/non-numeric input → `—`.
   - The fields named *Instrument*, *No. of samples*, *Lot* are used by conflicts, workload views and the intake form; renaming or deleting them disables those features.
-- **Integrations and backup** — *Copy ICS calendar* (all-day VEVENT on due date, open tasks), *Copy JSON backup*, *Import from field*, *Restore sample data*.
-- **Activity log** — last 40 of 300 events.
+- **Integrations** — *Copy ICS calendar* (all-day VEVENT on due date, open tasks), *Copy JSON backup* (clipboard).
+- **Activity log** — changes received in this browser session (last 40 of 300); the full trail is kept by the server (Admin / Project manager: `GET /api/audit`).
+- **Create account** (Admin): name, username (3+ characters), password (10+), role. *Reset password* signs that user out.
 
 ## 10. Roles
 
@@ -162,40 +159,29 @@ Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, ba
 | Accept requests | ✓ | ✓ | – | – |
 | Submit requests | ✓ | ✓ | ✓ | – |
 | Edit documents | ✓ | ✓ | ✓ | – |
-| Users & roles, import, restore snapshot, open file, reset | ✓ | – | – | – |
+| Users & accounts, import / export, backups and restore, clear data | ✓ | – | – | – |
+| Attach files | ✓ | ✓ | own tasks | – |
 
-Roles are a UI convention (see [SECURITY.md](../SECURITY.md)).
+Roles are enforced by the server on every request (see [SECURITY.md](../SECURITY.md)). A Researcher may change status, notes, estimate, tags, custom fields, hours, timer and priority on own tasks, not title, dates, project or assignee.
 
-## 11. Autosave, backup folder and sessions
+## 11. Data, sync and backups
+
+Every change is sent to the server within ~0.3 s and appears in the other open sessions within seconds. The status line (side rail) shows *Synced hh:mm:ss*, *Syncing…* or *Offline: retrying*. While offline, edits stay in the open page and are retried; closing the page loses them (the browser warns).
+
+**Conflicts.** Each record has a revision. If someone saved the same record first, LabPM merges field by field: your changed fields win, everything else comes from the server (a toast says so). Dates, statuses, dependencies and automations are applied by the server: when you move a task, successors are shifted and rules fire for everyone, once.
+
+**Blocked tasks.** A task with open predecessors cannot move past *To do* (the server answers *Blocked by: …*).
 
 | Action | Where | Notes |
 |---|---|---|
-| Autosave (browser) | automatic | `localStorage`, on every change and on every keystroke in notes / document title / document text; message in the rail footer |
-| **Backup folder** | Session | See below |
-| Save in browser | Session | Named snapshot, max 12 (oldest dropped); includes `ui` state but not running timers |
-| Save to file | Session | `labpm-session-YYYY-MM-DD.json` download |
-| Restore snapshot / open file | Session | Admin; two-step confirm; automatic snapshot first; ≤ 5 MB |
-| Copy / paste JSON | Session, Settings | Clipboard fallback writes into the text field |
+| Change password | Data & sync | Any user |
+| Download full database | Data & sync | Admin; `labpm-database-YYYY-MM-DD.json` (schema v1) |
+| Import a session file | Data & sync | Admin; adds/overwrites by id, deletes nothing; optional people as placeholders (no login); timers dropped; ≤ 5 MB |
+| Backups | Data & sync | Admin; *Create backup now*, *Restore* (replaces all data and accounts, signs everyone out, saves a `pre-restore` copy first) |
+| Empty database file | Data & sync | `labpm-empty.json` for a fresh import |
+| Clear all project data | Data & sync | Admin; two clicks; deletes projects, tasks, hours, goals, documents, rules for everyone; keeps people, roles, custom fields. Download the database first |
 
-### Empty database and clearing
-
-- **Download empty database file** (*Session → Empty database*) saves `labpm-empty.json`: no projects/tasks, one Admin user, the four default custom fields. A ready-made copy is in the repository at `empty-database/labpm-empty.json`. Load with *Open from file* (Admin).
-- **Clear all project data** (Admin; two clicks): deletes projects, tasks, hours, goals, documents, rules, attachment links and the activity log; keeps users, roles and custom fields. First an automatic browser snapshot (restorable under *Sessions saved in the browser*) and, if a folder is connected, a `labpm-copy-<date>.json` are written. Attachment files in the folder are not deleted.
-- With an empty database, create a project in *Portfolio* (or from *Templates*) before adding tasks.
-
-### Backup folder (recommended before you start entering data)
-
-*Session → Backup folder → Choose folder…* (Chromium browsers: Chrome, Edge).
-
-1. Pick any folder (local, network share, cloud-synced folder). The browser asks for read/write permission.
-2. LabPM immediately writes `labpm-initial-YYYYMMDD-HHMMSS.json` — the database **as it was before further editing** — and `labpm-autosave.json`.
-3. From then on `labpm-autosave.json` is rewritten ~0.8 s after every change (writes are queued, so it is always the latest consistent state). The rail footer shows the last folder write time.
-4. *Save timestamped copy now* adds `labpm-copy-YYYYMMDD-HHMMSS.json`; *Pause autosave* / *Resume*, *Change folder…*, *Disconnect* are available.
-5. After closing the browser, LabPM remembers the folder but Chrome asks permission again: use **Reconnect folder**. Until then browser-only autosave continues.
-
-If a write fails (folder removed, disk full, permission revoked) autosave stops, a message is shown and the Session page reports the error; fix the cause and *Resume*. Restore from any of the files with *Open from file* (Admin).
-
-Files (database and attachments) are unencrypted. Not supported in Firefox/Safari (use *Save to file*; attachments unavailable).
+Automatic backups: at every server start and daily at 03:00, last 14, in `backups/` of the data folder. They contain the database and accounts, not attachment files: copy the whole data folder for a complete backup.
 
 ## 12. Keyboard and accessibility
 

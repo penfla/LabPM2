@@ -10,4 +10,4 @@ labels: enhancement
 
 **Alternatives considered:**
 
-Note: LabPM is a single-file, backend-free tool. Features that need a server are out of scope for v1.x (see docs/ARCHITECTURE.md).
+Note: LabPM 2 is a self-hosted LAN server with no third-party services and no runtime dependencies; proposals should keep that (see docs/ARCHITECTURE.md).

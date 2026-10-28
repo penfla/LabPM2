@@ -3,6 +3,8 @@
 ## 2.0.0-beta.1 (unreleased)
 - New: zero-configuration start (`start.bat` / `start.sh`); single setting `dataDir` in `labpm.config.json`; LAN addresses printed at start; single-instance lock; rollback-journal SQLite (safe on network shares); automatic daily backup (14 kept).
 - New: date cascade, automations, blocked-status check, timer stop on Done and overdue sweep run on the server in the mutation transaction (removed from the client; `notify` actions reach all sessions).
+- New: backup list/create/restore in the UI (Admin), with automatic pre-restore copy.
+- Docs: USER_GUIDE, SECURITY, CONTRIBUTING rewritten for v2; new `docs/MIGRATION.md`.
 - New: attachments stored on the server (`attachments/`, 25 MB default limit, sanitised names, authenticated download, removed with the task).
 - New: central server (Node 22, `node:sqlite` WAL, zero runtime dependencies).
 - New: local accounts (scrypt), HttpOnly/SameSite=Strict session cookie, login throttling.

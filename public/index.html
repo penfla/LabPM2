@@ -572,7 +572,7 @@ function vSession(){var ad=isAdmin();
    '<section class="card"><h2>Account</h2><p style="margin:0 0 8px">Signed in as <b>'+esc(me().name)+'</b> ('+esc(me().role)+')</p><div class="form"><label>Current password<input type="password" id="pw-c" autocomplete="current-password"></label><label>New password (10+ characters)<input type="password" id="pw-n" autocomplete="new-password"></label><label class="full"><button class="btn" data-act="chpw" style="width:max-content">Change password</button></label></div></section></div>'+
    '<section class="card"><h2>Export and import (Admin)</h2><div class="tools"><button class="btn" data-act="exportdb"'+(ad?'':' disabled')+'>Download full database (.json)</button></div>'+
    '<div class="form" style="margin-top:10px"><label class="full">Import a LabPM session file (.json, schema v1)<input type="file" accept=".json,application/json" data-ch="openfile"'+(ad?'':' disabled')+'></label><label class="full"><span class="row"><input type="checkbox" id="imp-u"> Import people as placeholders (no login; Admin role becomes Viewer)</span></label></div>'+
-   '<p class="small muted" style="margin:10px 0 0">Import adds or overwrites records with the same id; nothing is deleted. Running timers are not imported.</p></section>'+vEmpty()}
+   '<p class="small muted" style="margin:10px 0 0">Import adds or overwrites records with the same id; nothing is deleted. Running timers are not imported.</p></section>'+(ad?'<section class="card"><h2>Server backups (Admin)</h2><p class="small muted" style="margin:0 0 8px">An automatic copy is made at every server start and daily at 03:00 (last 14 kept) in the <span class="mono">backups</span> folder of the data folder. Restoring replaces <b>all</b> data and accounts with the selected copy, signs everyone out and first saves a <span class="mono">pre-restore</span> copy. Attachment files are not part of the database copy.</p><div class="tools"><button class="btn pri" data-act="bknow">Create backup now</button></div>'+(BK&&BK.length?'<div class="lst small" style="margin-top:8px">'+BK.map(function(b){return '<div><span class="mono">'+esc(b.name)+'</span> <span class="muted">'+fsz(b.size)+' · '+new Date(b.mtime).toLocaleString('en-GB')+'</span><button class="btn sm dng" data-act="bkrestore" data-name="'+esc(b.name)+'">Restore</button></div>'}).join('')+'</div>':'<p class="muted small">'+(BK?'No backups yet.':'Loading…')+'</p>')+'</section>':'')+vEmpty()}
 
 /* ---------- task detail ---------- */
 function renderDrawer(){
@@ -694,7 +694,9 @@ function vEmpty(){var ad=isAdmin(),c=S.ui.confirmClear;
 
 /* ---------- actions ---------- */
 function defVal(type){return {status_to:'Done',set_status:'In progress',priority:'High',set_priority:'High',project:S.projects[0]?S.projects[0].id:'',set_assignee:''}[type]||''}
-function go(view){S.ui.view=view;S.ui.drawer=null;S.ui.confirmClear=false;save();render();renderDrawer();window.scrollTo(0,0)}
+var BK=null;
+function loadBackups(){api('GET','/api/backups').then(function(r){BK=r.s===200?r.j.backups:[];if(S.ui.view==='session')renderBody()})}
+function go(view){if(view==='session'&&isAdmin())loadBackups();S.ui.view=view;S.ui.drawer=null;S.ui.confirmClear=false;save();render();renderDrawer();window.scrollTo(0,0)}
 function download(txt,label){var done=function(){toast(label+' copied to clipboard')};
   var fb=function(){var a=$('#jb');if(a){a.value=txt;a.focus();a.select()}toast('Clipboard unavailable: text placed in the field, copy it from there')};
   try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}}
@@ -702,6 +704,8 @@ var A={
  nav:function(e){go(e.dataset.v)},
  theme:function(e){S.ui.theme=e.dataset.v;applyTheme();save();render();renderDrawer()},
  xlsx:function(){exportTasks()},
+ bknow:function(){api('POST','/api/backups',{}).then(function(r){if(r.s===201){BK=r.j.backups;toast('Backup created.');renderBody()}else toast(r.j.error||'Error')})},
+ bkrestore:function(e){var n=e.dataset.name;if(!confirm('Restore '+n+'?\nAll current data and accounts are replaced and everyone is signed out.'))return;api('POST','/api/backups/restore',{name:n}).then(function(r){if(r.s===200){showLogin()}else toast(r.j.error||'Error')})},
  frm:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;if(!confirm('Delete "'+f.name+'" from the server?'))return;api('DELETE','/api/files/'+f.id).then(function(r){if(r.s===200){S.files=S.files.filter(function(x){return x.id!==f.id});log('Deleted file "'+f.name+'"');renderBody();renderDrawer()}else toast(r.j.error||'Error')})},
  clearf:function(){var u=S.ui;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';save();renderBody()},
  emptyfile:function(){var blob=new Blob([JSON.stringify(emptySession(),null,1)],{type:'application/json'});saveBlob(blob,'labpm-empty.json','LabPM database','.json','application/json').then(function(ok){if(ok)toast('Empty database file saved.')})},

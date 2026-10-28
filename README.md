@@ -14,7 +14,7 @@ The data folder holds `labpm.sqlite`, `attachments/` and `backups/` (automatic c
 npm test                # API, start-up and two-browser tests (browser test needs `playwright`)
 ```
 
- Details: `docs/ARCHITECTURE-v2.md`, `CHANGELOG.md`.
+ Details: `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/MIGRATION.md` (from v1.3), `SECURITY.md`, `CHANGELOG.md`.
 
 Author: Flavio Pendolino · License: PolyForm Noncommercial 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0) · Commercial use: penfla@me.com
 Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.

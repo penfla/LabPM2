@@ -24,6 +24,7 @@ var fs = require('node:fs');
 var os = require('node:os');
 var path = require('node:path');
 var attDir = fs.mkdtempSync(path.join(os.tmpdir(), 'labpm-att-'));
+var bakDir = fs.mkdtempSync(path.join(os.tmpdir(), 'labpm-bak-'));
 
 var srv, base, handle;
 function req(method, path, body, cookie, headers) {
@@ -37,7 +38,7 @@ function req(method, path, body, cookie, headers) {
 var T = { id: 't1', projectId: 'p1', title: 'DSC run', status: 'To do', priority: 'Medium', assignee: null, start: '2026-11-02', due: '2026-11-03', est: 4, deps: [], tags: [], cf: {}, notes: '', log: [] };
 
 test.before(function () {
-  var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir, maxUploadMb: 1 });
+  var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir, backupsDir: bakDir, maxUploadMb: 1 });
   handle = a; srv = a.server;
   return new Promise(function (r) { srv.listen(0, '127.0.0.1', function () { base = 'http://127.0.0.1:' + srv.address().port; r(); }); });
 });
@@ -212,4 +213,22 @@ test('attachments: upload, authenticated download, limits, RBAC, cascade on task
   assert.strictEqual((await req('DELETE', '/api/tasks/at1', undefined, pm)).s, 200);
   assert.ok(!fs.existsSync(path.join(attDir, left[0].id)));
   assert.strictEqual((await req('GET', '/api/state', undefined, pm)).j.state.files.length, 0);
+});
+
+test('backups: create, list, restore (Admin only) reverts data, revokes sessions, keeps a pre-restore copy', async function () {
+  assert.strictEqual((await req('POST', '/api/backups', {}, pm)).s, 403);
+  var mk = await req('POST', '/api/backups', {}, admin);
+  assert.strictEqual(mk.s, 201);
+  var name = mk.j.name;
+  await req('POST', '/api/projects', { id: 'after-bak', name: 'Created after backup', c: 0, status: 'auto' }, pm);
+  assert.strictEqual((await req('POST', '/api/backups/restore', { name: '../../etc/passwd' }, admin)).s, 400);
+  assert.strictEqual((await req('POST', '/api/backups/restore', { name: name }, pm)).s, 403);
+  assert.strictEqual((await req('POST', '/api/backups/restore', { name: name }, admin)).s, 200);
+  assert.strictEqual((await req('GET', '/api/me', undefined, admin)).s, 401); // all sessions revoked
+  var again = await req('POST', '/api/login', { username: 'flavio', password: 'correct-horse-1' });
+  assert.strictEqual(again.s, 200);
+  var st = (await req('GET', '/api/state', undefined, again.c)).j.state;
+  assert.ok(!st.projects.some(function (p) { return p.id === 'after-bak'; }));
+  assert.ok(fs.readdirSync(bakDir).some(function (f) { return /pre-restore/.test(f); }));
+  assert.ok((await req('GET', '/api/backups', undefined, again.c)).j.backups.length >= 2);
 });

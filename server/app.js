@@ -26,6 +26,8 @@ var V = require('./validate');
 var P = require('./perms');
 var L = require('./logic');
 
+var sqlite = require('node:sqlite');
+var BAK_RE = /^labpm-(pre-restore-)?\d{8}-\d{4}\.sqlite$/;
 var COOKIE = 'labpm_sid';
 var TTL = 12 * 3600 * 1000;
 var CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -34,6 +36,7 @@ function createApp(opts) {
   opts = opts || {};
   var db = D.open(opts.dbPath || ':memory:', opts.wal);
   var attDir = opts.attachmentsDir || null;
+  var bakDir = opts.backupsDir || null;
   var maxUpload = (opts.maxUploadMb || 25) * 1048576;
   if (attDir) fs.mkdirSync(attDir, { recursive: true });
   var pub = opts.publicDir || path.join(__dirname, '..', 'public');
@@ -273,6 +276,17 @@ function createApp(opts) {
       req.on('close', function () { clearInterval(hb); clients = clients.filter(function (x) { return x !== c; }); });
       return;
     }
+    if (p === '/api/backups' && m === 'GET') { if (user.role !== 'Admin') throw err(403, 'forbidden'); return json(res, 200, { backups: listBackups() }); }
+    if (p === '/api/backups' && m === 'POST') return body(req, 1e3).then(function () {
+      if (user.role !== 'Admin') throw err(403, 'forbidden');
+      if (!bakDir) throw err(501, 'backups not enabled');
+      var f = backup(bakDir, 14, true); json(res, 201, { name: path.basename(f), backups: listBackups() });
+    });
+    if (p === '/api/backups/restore' && m === 'POST') return body(req, 1e3).then(function (b) {
+      if (user.role !== 'Admin') throw err(403, 'forbidden');
+      restore(user, String(b.name || ''));
+      json(res, 200, { ok: true });
+    });
     if (p === '/api/audit' && m === 'GET') {
       if (user.role !== 'Admin' && user.role !== 'Project manager') throw err(403, 'forbidden');
       var lim = Math.min(500, +url.searchParams.get('limit') || 100);
@@ -384,11 +398,33 @@ function createApp(opts) {
   }
 
   /* ---- backup (consistent copy via VACUUM INTO) ---- */
-  function backup(dir, keep) {
+  function listBackups() {
+    if (!bakDir || !fs.existsSync(bakDir)) return [];
+    return fs.readdirSync(bakDir).filter(function (x) { return BAK_RE.test(x); }).sort().reverse().map(function (x) { var st = fs.statSync(path.join(bakDir, x)); return { name: x, size: st.size, mtime: st.mtimeMs }; });
+  }
+  function restore(user, name) {
+    if (!bakDir || !BAK_RE.test(name)) throw err(400, 'invalid backup name');
+    var f = path.join(bakDir, name);
+    if (!fs.existsSync(f)) throw err(404, 'backup not found');
+    var src;
+    try { src = new sqlite.DatabaseSync(f, { readOnly: true }); src.prepare('SELECT COUNT(*) FROM entities').get(); } catch (e) { if (src) src.close(); throw err(400, 'not a valid LabPM backup'); }
+    try {
+      backup(bakDir, 14, 'pre-restore');
+      D.tx(db, function () {
+        db.exec('DELETE FROM entities; DELETE FROM accounts; DELETE FROM sessions;');
+        src.prepare('SELECT kind,id,data,rev,updated,by FROM entities').all().forEach(function (r) { q.putEnt.run(r.kind, r.id, r.data, r.rev, r.updated, r.by); });
+        src.prepare('SELECT id,username,hash,created FROM accounts').all().forEach(function (r) { q.addAcct.run(r.id, r.username, r.hash, r.created); });
+        emit(user.id, 'system', 'restore', 'restore', null, { from: name });
+      });
+    } finally { src.close(); }
+    clients.forEach(function (c) { c.res.end(); }); clients = [];
+  }
+  function backup(dir, keep, tag) {
     fs.mkdirSync(dir, { recursive: true });
     var d = new Date(), st = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
-    var f = path.join(dir, 'labpm-' + st + '.sqlite');
-    if (fs.existsSync(f)) return f;
+    var f = path.join(dir, (tag === 'pre-restore' ? 'labpm-pre-restore-' : 'labpm-') + st + '.sqlite');
+    if (fs.existsSync(f) && !tag) return f;
+    if (fs.existsSync(f)) fs.unlinkSync(f);
     db.exec("VACUUM INTO '" + f.replace(/'/g, "''") + "'");
     var all = fs.readdirSync(dir).filter(function (x) { return /^labpm-\d{8}-\d{4}\.sqlite$/.test(x); }).sort();
     while (all.length > (keep || 14)) fs.unlinkSync(path.join(dir, all.shift()));

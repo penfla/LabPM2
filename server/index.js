@@ -56,6 +56,7 @@ var beat = setInterval(function () { try { fs.utimesSync(lock, new Date(), new D
 var a = app.createApp({
   dbPath: path.join(dir, 'labpm.sqlite'),
   attachmentsDir: path.join(dir, 'attachments'),
+  backupsDir: path.join(dir, 'backups'),
   maxUploadMb: +process.env.MAX_UPLOAD_MB || 25,
   wal: process.env.LABPM_WAL === '1',
   cookieSecure: process.env.COOKIE_SECURE === '1'
