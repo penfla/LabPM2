@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.0.0-beta.1 (unreleased)
+## 2.0.0-beta.2 (unreleased)
+- New: **shared-folder mode**: the same `index.html` runs without any server on a shared network folder (Chrome/Edge): per-device operation logs merged per field (`shared/fold.js`), name-based identity, attachments, daily backups, import/export. Mode is detected automatically.
+- Change: `logic.js` and `validate.js` moved to `shared/` and inlined into the page by `tools/inline.js` (`npm run inline`); a test guards against drift.
 - New: zero-configuration start (`start.bat` / `start.sh`); single setting `dataDir` in `labpm.config.json`; LAN addresses printed at start; single-instance lock; rollback-journal SQLite (safe on network shares); automatic daily backup (14 kept).
 - New: date cascade, automations, blocked-status check, timer stop on Done and overdue sweep run on the server in the mutation transaction (removed from the client; `notify` actions reach all sessions).
 - New: backup list/create/restore in the UI (Admin), with automatic pre-restore copy.

@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.1
+ * Version: 2.0.0-beta.2
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: HTTP API (auth, CRUD with RBAC, SSE change feed, import/export, audit) and static client
@@ -22,9 +22,9 @@ var fs = require('node:fs');
 var path = require('node:path');
 var crypto = require('node:crypto');
 var D = require('./db');
-var V = require('./validate');
+var V = require('../shared/validate');
 var P = require('./perms');
-var L = require('./logic');
+var L = require('../shared/logic');
 
 var sqlite = require('node:sqlite');
 var BAK_RE = /^labpm-(pre-restore-)?\d{8}-\d{4}\.sqlite$/;
@@ -234,7 +234,7 @@ function createApp(opts) {
     req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
-    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.1' });
+    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.2' });
 
     if (p === '/api/setup' && m === 'POST') return body(req).then(function (b) {
       var out = D.tx(db, function () { if (q.acctCount.get().n) throw err(409, 'already initialised'); return newAccount(b, 'Admin'); });

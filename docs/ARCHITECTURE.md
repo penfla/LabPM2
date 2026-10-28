@@ -1,6 +1,6 @@
 # LabPM v2 — architecture (alpha)
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.1 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
+Author: Flavio Pendolino · Version: 2.0.0-beta.2 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
 Purpose: central multi-user server for LabPM (option C). Method: Node.js built-ins + SQLite. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:sqlite`, `node:crypto`). Reference baseline: https://github.com/penfla/LabPM (v1.3.0).
@@ -11,7 +11,7 @@ Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:s
 | Scale / host | ≤ 20 concurrent users, one lab server, Docker Compose + TLS reverse proxy (Caddy https://caddyserver.com / nginx) |
 | DB | SQLite WAL, one `entities(kind,id,data JSON,rev)` table keeps schema v1 of `DATA_MODEL.md`; PostgreSQL out of scope |
 | Auth | local users, scrypt (N=32768) from `node:crypto`; OIDC deferred (v2.1). Deviation from the argon2id proposal: avoids a native dependency |
-| Logic | cascade, automations, blocked-status check, timer stop and overdue sweep run server-side in the mutation transaction (`server/logic.js`); derived events carry no client id so the originating client applies them |
+| Logic | cascade, automations, blocked-status check, timer stop and overdue sweep run server-side in the mutation transaction (`shared/logic.js`); derived events carry no client id so the originating client applies them |
 | Standalone | v1.3 stays in https://github.com/penfla/LabPM; this repo is server-only |
 
 ## API (all JSON, cookie `labpm_sid`; mutations require `Content-Type: application/json`)
@@ -31,10 +31,28 @@ Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:s
 
 Researcher on own tasks may change: `status notes est tags cf log timer priority`; may submit intake requests (`src:"form"`, `Triage`).
 
+## Shared-folder mode (no server)
+`public/index.html` also works without the server (user asked for a no-install option). Same page, same entities; `shared/*.js` (logic, validation, fold) is inlined into the page by `tools/inline.js` and a test fails if the copy drifts.
+
+| Item | Design |
+|---|---|
+| Storage | folder with `log/<device>.jsonl` (append-only, **one writer per file**), `attachments/<id>`, `backups/`, `meta.json` |
+| Operation | `{t, d, u, k, id, c?, p}` set fields (`c` = full-record write: create / restore) · `{…, x:1}` delete |
+| Merge (`shared/fold.js`) | per-field last-writer-wins on (clock, device); hybrid clock = max(wall time, seen+1); a record is alive if its latest `c` is newer than its latest `x`; stale patches cannot resurrect; order- and repetition-independent (tested) |
+| Reading | every 4 s each changed log file is re-read in full (files are small: compaction rewrites a device's log when > 1 MB, keeping only winning values) |
+| Device id | `localStorage`; Web Locks give a second tab its own id so two tabs never write the same log |
+| Identity | pick a name; no passwords (roles are UI only) |
+| Derived logic | `shared/logic.js` runs in the browser of the user who made the change; overdue sweep runs in every browser, create-task actions use deterministic ids so duplicates collapse |
+| Attachments | copied to `attachments/<id>` (25 MB limit), downloaded through the folder handle |
+| Backups | daily JSON copy by the first PC of the day (14 kept); restore = full write over current records |
+| Test hook | `#opfs=<name>` in the URL uses the browser's private file system instead of a picker (used by the Playwright test) |
+
+Limits: Chromium only; ~4 s latency; whole-array fields (`log`, `tags`, `deps`) are last-writer-wins, so two people logging hours on the same task within seconds can lose one entry; a record deleted on one PC disappears everywhere; dead devices' log files are never pruned; not tested on real SMB shares (the test uses OPFS as the shared folder).
+
 ## Roadmap
 1. ✅ server, auth, RBAC, rev/409, SSE, import/export, tests
 2. ✅ client sync layer (`public/index.html`): login/first-run screens, `GET /api/state`, diff-based push of local edits, 409 → per-field merge + retry, SSE with replay, deferred re-render while typing, Playwright two-browser test
-3. ✅ server-side cascade, automations, overdue sweep (`server/logic.js`)
+3. ✅ server-side cascade, automations, overdue sweep (`shared/logic.js`)
 4. ✅ attachments on disk, ✅ daily backup
 5. ✅ backup restore from the UI, v1→v2 guide (`MIGRATION.md`), USER_GUIDE and SECURITY rewritten
 

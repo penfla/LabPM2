@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.1
+ * Version: 2.0.0-beta.2
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: Server-side date cascade, automations, overdue sweep and timer stop (moved from the v1.3 client)
@@ -96,7 +96,7 @@ Engine.prototype.fire = function (tr, t, depth) {
     else if (a.type === 'add_tag') { if (t.tags.indexOf(a.value) < 0) { t.tags.push(a.value); self.touch(t); } }
     else if (a.type === 'create_task') {
       var s = nextWD(self.today);
-      var n = { id: self.uid('t'), projectId: t.projectId, title: a.value, notes: '', status: 'To do', priority: 'Medium', assignee: t.assignee, start: s, due: addWD(s, 2), est: 0, deps: [], tags: [], cf: {}, log: [], timer: null, created: self.now, ovFired: false };
+      var n = { id: self.uid('t', tr.type === 'overdue' ? r.id + ':' + t.id : null), projectId: t.projectId, title: a.value, notes: '', status: 'To do', priority: 'Medium', assignee: t.assignee, start: s, due: addWD(s, 2), est: 0, deps: [], tags: [], cf: {}, log: [], timer: null, created: self.now, ovFired: false };
       self.tasks.push(n); self.byId[n.id] = n; self.touch(n); self.created[n.id] = true;
       self.fire({ type: 'created' }, n, depth + 1);
     }

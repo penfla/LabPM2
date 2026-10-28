@@ -1,6 +1,6 @@
 # User guide
 
-Applies to LabPM 2.0.0-beta.1. Source: https://github.com/penfla/LabPM2
+Applies to LabPM 2.0.0-beta.2. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
@@ -182,6 +182,17 @@ Every change is sent to the server within ~0.3 s and appears in the other open s
 | Clear all project data | Data & sync | Admin; two clicks; deletes projects, tasks, hours, goals, documents, rules for everyone; keeps people, roles, custom fields. Download the database first |
 
 Automatic backups: at every server start and daily at 03:00, last 14, in `backups/` of the data folder. They contain the database and accounts, not attachment files: copy the whole data folder for a complete backup.
+
+## 11b. Shared-folder mode (no server)
+
+If no LabPM server answers, the page asks for the shared folder (README, option A). Differences:
+
+- **Who are you?** instead of a login: pick your name, or *I am new here*. *Switch user* in the top bar changes identity. Settings → *Add person* creates colleagues (no passwords). Roles shape the interface but are **not** access control.
+- Changes of other PCs appear after ~4 s. The status line reads *Shared folder · synced hh:mm:ss*.
+- Date cascade, automations and the overdue check run in your browser. The first PC to notice an overdue task fires its rule.
+- Files are copied to `attachments/` in the folder; backups are daily JSON copies in `backups/` (Data & sync → Backups, Admin; restore replaces all records).
+- Import / export work on JSON files as in server mode; there is no audit page.
+- Needs Chrome or Edge; after a browser restart use *Reconnect folder*.
 
 ## 12. Keyboard and accessibility
 

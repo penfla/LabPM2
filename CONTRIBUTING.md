@@ -1,16 +1,17 @@
 # Contributing
 
-Repository: https://github.com/penfla/labpm · Issues: https://github.com/penfla/labpm/issues
+Repository: https://github.com/penfla/LabPM2 · Issues: https://github.com/penfla/LabPM2/issues
 
 ## Principles
 
 1. **No build step, no runtime dependencies.** Server: Node ≥ 22.13 built-ins only (`node:http`, `node:sqlite`, `node:crypto`). Client: one `public/index.html` (HTML + CSS + JS), no bundler or framework.
-2. **The server is authoritative.** Permissions (`server/perms.js`), validation (`server/validate.js`) and derived changes — date cascade, automations, overdue (`server/logic.js`) — live on the server; the client only edits fields and renders.
-3. **No third-party requests.** The page CSP is `connect-src 'self'`; no CDN fonts or scripts. The server makes no outbound calls.
-4. **Deterministic.** No generative-AI calls. If one is ever added, the AI-disclosure text (headers, Info page, README) must switch to the Art. 50 AI Act wording.
-5. **Escape everything.** User-controlled text goes through `esc()` before entering `innerHTML`. The markdown renderer `md()` escapes first, then adds tags.
-6. **Validate on the server.** Any new persisted field must be added to `server/validate.js` and `docs/DATA_MODEL.md`, and to the Researcher whitelist in `perms.js` if Researchers may edit it.
-7. **English UI**, ISO dates internally (`YYYY-MM-DD`), working days = Mon–Fri.
+2. **Shared code lives in `shared/`** (`logic.js`, `validate.js`, `fold.js`; UMD-free CommonJS, no Node APIs) and is inlined into `public/index.html` by `npm run inline`: run it after every edit (a test fails otherwise).
+3. **The server is authoritative in server mode.** Permissions (`server/perms.js`), validation (`shared/validate.js`) and derived changes — date cascade, automations, overdue (`shared/logic.js`) — live on the server; the client only edits fields and renders.
+4. **No third-party requests.** The page CSP is `connect-src 'self'`; no CDN fonts or scripts. The server makes no outbound calls.
+5. **Deterministic.** No generative-AI calls. If one is ever added, the AI-disclosure text (headers, Info page, README) must switch to the Art. 50 AI Act wording.
+6. **Escape everything.** User-controlled text goes through `esc()` before entering `innerHTML`. The markdown renderer `md()` escapes first, then adds tags.
+7. **Validate in `shared/validate.js`.** Any new persisted field must be added there and `docs/DATA_MODEL.md`, and to the Researcher whitelist in `perms.js` if Researchers may edit it.
+8. **English UI**, ISO dates internally (`YYYY-MM-DD`), working days = Mon–Fri.
 
 ## Dev setup
 

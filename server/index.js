@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.1
+ * Version: 2.0.0-beta.2
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: Server entry point: data folder (only setting), single-instance lock, daily backup, LAN addresses
@@ -23,7 +23,7 @@ var path = require('node:path');
 var app = require('./app');
 
 var ROOT = path.join(__dirname, '..');
-var VERSION = '2.0.0-beta.1';
+var VERSION = '2.0.0-beta.2';
 
 function readConfig() {
   var f = path.join(ROOT, 'labpm.config.json');

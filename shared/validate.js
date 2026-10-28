@@ -4,7 +4,7 @@
  * https://polyformproject.org/licenses/noncommercial/1.0.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.1
+ * Version: 2.0.0-beta.2
  * License: PolyForm Noncommercial 1.0.0
  * Commercial use: penfla@me.com
  * Purpose: Entity validation/normalisation (schema v1 of docs/DATA_MODEL.md)
