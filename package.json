@@ -1,0 +1,15 @@
+{
+  "name": "labpm",
+  "version": "2.0.0-alpha.1",
+  "description": "LabPM v2: multi-user project, task and request manager for chemical/polymer laboratories (Node + SQLite server).",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Flavio Pendolino",
+  "homepage": "https://github.com/penfla/LabPM2",
+  "repository": { "type": "git", "url": "https://github.com/penfla/LabPM2.git" },
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "test": "node --test --no-warnings tests/api.test.js"
+  }
+}

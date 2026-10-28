@@ -1,0 +1,942 @@
+<!--
+License-Identifier: PolyForm-Noncommercial-1.0.0
+Copyright (c) 2026 Flavio Pendolino
+https://polyformproject.org/licenses/noncommercial/1.0.0
+
+Author: Flavio Pendolino
+Version: 1.3
+License: PolyForm Noncommercial 1.0.0
+Commercial use: penfla@me.com
+Purpose: Project, task, resource and request management for a chemical/polymer laboratory.
+Method: Single-file HTML, vanilla JavaScript; data in browser localStorage, optional autosave to a user-chosen folder (File System Access API); attachments copied into an 'attachments' subfolder of that folder; sessions saved as local snapshots or JSON files; task export as .xlsx (OOXML written in-page). Deterministic calculations.
+Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
+Third-party components: IBM Plex Sans, IBM Plex Mono, Bricolage Grotesque (Google Fonts, SIL OFL 1.1).
+Scientific references: ASTM D3418, ISO 11357-3, ISO 1133-1, ISO 527-3, ASTM D3985 (cited in the templates).
+AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+
+<title>LabPM — Laboratory project management</title>
+<meta name="description" content="Single-file project, task, resource and request manager for chemical/polymer laboratories.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: navigation rail on the left + work area; on phones the rail becomes a scrolling bar. */
+:root{--bg:#F7F9FA;--surface:#FFFFFF;--surface2:#EFF3F5;--ink:#1B2A31;--muted:#5F727C;--line:#E0E7EA;--accent:#0F7B8A;--accent-ink:#FFFFFF;--accent-soft:#D6ECEF;--good:#2B8553;--warn:#B97A06;--bad:#C13B2B;--s0:#73848E;--s1:#3A6BCB;--s2:#B97A06;--s3:#7F55C4;--s4:#2B8553;--p0:#0F7B8A;--p1:#B5651D;--p2:#6A5ACD;--p3:#2E8B57;--p4:#C2417A;--p5:#5B7083;--wk:rgba(19,35,43,.05);--shadow:0 10px 36px rgba(19,35,43,.22);--f-d:'Bricolage Grotesque','IBM Plex Sans',system-ui,sans-serif;--f-b:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;--f-m:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0D171B;--surface:#142228;--surface2:#1B2D34;--ink:#E4EDF0;--muted:#8EA3AD;--line:#25383F;--accent:#3DB8C8;--accent-ink:#06222A;--accent-soft:#163940;--good:#4DB87C;--warn:#E0A530;--bad:#EF7766;--s0:#8EA0AA;--s1:#7AA2F2;--s2:#E0A530;--s3:#A98AE6;--s4:#4DB87C;--p0:#3DB8C8;--p1:#E09A55;--p2:#9A8DF0;--p3:#5CC48A;--p4:#E36BA0;--p5:#8FA3B5;--wk:rgba(228,237,240,.05);--shadow:0 10px 36px rgba(0,0,0,.6);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0D171B;--surface:#142228;--surface2:#1B2D34;--ink:#E4EDF0;--muted:#8EA3AD;--line:#25383F;--accent:#3DB8C8;--accent-ink:#06222A;--accent-soft:#163940;--good:#4DB87C;--warn:#E0A530;--bad:#EF7766;--s0:#8EA0AA;--s1:#7AA2F2;--s2:#E0A530;--s3:#A98AE6;--s4:#4DB87C;--p0:#3DB8C8;--p1:#E09A55;--p2:#9A8DF0;--p3:#5CC48A;--p4:#E36BA0;--p5:#8FA3B5;--wk:rgba(228,237,240,.05);--shadow:0 10px 36px rgba(0,0,0,.6);color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-b);padding-block:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:var(--accent)}
+h1,h2,h3{font-family:var(--f-d);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:28px}h2{font-size:17px}h3{font-size:15px}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);gap:32px;padding-block:20px;max-width:1480px;margin:0 auto}
+.side{position:sticky;top:20px;align-self:start;display:flex;flex-direction:column;gap:2px}
+.brand{font:700 24px var(--f-d);padding:4px 12px 10px;letter-spacing:-.02em}
+.brand small{display:block;font:400 11px var(--f-m);color:var(--muted);letter-spacing:0}
+.nv{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--muted);font-weight:500}
+.nv:hover{background:var(--surface2);color:var(--ink)}
+.nv[aria-current=page]{background:var(--accent-soft);color:var(--accent)}
+.nv:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.main{min-width:0;display:flex;flex-direction:column;gap:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.topr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.who{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0;box-shadow:0 1px 2px var(--wk)}
+.card h2{margin-bottom:14px}
+.muted{color:var(--muted)}.mono{font-family:var(--f-m);font-variant-numeric:tabular-nums}
+.small{font-size:12px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%;min-width:0}
+input[type=checkbox]{width:auto}
+textarea{width:100%;resize:vertical}
+input:disabled,select:disabled,textarea:disabled{opacity:.6}
+.btn{font:inherit;font-weight:500;cursor:pointer;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 11px}
+.btn:hover{background:var(--surface2)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.dng{color:var(--bad);border-color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:3px 8px;font-size:12px}
+.tmr{display:inline-flex;gap:6px;align-items:center;font-family:var(--f-m)}
+.rec{width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.bar.w>i{background:var(--warn)}.bar.b>i{background:var(--bad)}.bar.g>i{background:var(--good)}
+.pill{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.tag{font:11px var(--f-m);background:var(--surface2);border-radius:4px;padding:1px 6px;color:var(--muted);white-space:nowrap}
+.flag{font:600 11px var(--f-m);border-radius:4px;padding:1px 6px}
+.flag.bad{color:var(--bad);border:1px solid var(--bad)}.flag.warn{color:var(--warn);border:1px solid var(--warn)}.flag.good{color:var(--good);border:1px solid var(--good)}
+.pr0{color:var(--muted)}.pr2{color:var(--warn);font-weight:600}.pr3{color:var(--bad);font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--c);margin-right:6px;flex:none}
+.tbw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 1px 2px var(--wk)}
+.tbl{border-collapse:collapse;width:100%;min-width:760px}
+.tbl th{font:600 11px var(--f-m);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tr[data-act]{cursor:pointer}.tbl tr[data-act]:hover td{background:var(--surface2)}
+.tbl tr.gh td{background:var(--surface2);font-weight:600;font-family:var(--f-d)}
+.tbl tr:last-child td{border-bottom:0}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:5px 11px;font-weight:500;color:var(--muted);box-sizing:border-box}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}
+.wgrid .full{grid-column:1/-1}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 28px}
+.kpis div{display:flex;flex-direction:column}
+.kpis b{font:500 22px var(--f-m)}
+.kpis span{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;min-width:0}
+.row>.grow{flex:1;min-width:0}
+.lst{display:flex;flex-direction:column;gap:8px}
+.lst>div{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.wcfg{font-size:12px;color:var(--muted)}.wcfg label{margin-right:12px;white-space:nowrap}
+.wcfg summary{cursor:pointer;margin-bottom:6px}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:10px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--surface2);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:140px}
+.col h3{display:flex;justify-content:space-between}
+.col.over{outline:2px dashed var(--accent)}
+.kc{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:inherit}
+.kc:hover{border-color:var(--accent)}
+.kc .t{font-weight:500}
+.kc .m{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.tl{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);max-height:68vh}
+.tl-in{position:relative}
+.tl-row{display:flex;height:30px;border-bottom:1px solid var(--line)}
+.tl-row.hd{height:34px;position:sticky;top:0;z-index:4;background:var(--surface)}
+.tl-row.ph{background:var(--surface2)}
+.tl-lab{position:sticky;left:0;z-index:3;width:210px;flex:none;background:inherit;background-color:var(--surface);padding:0 8px;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-right:1px solid var(--line);cursor:pointer;font-size:13px}
+.tl-row.ph .tl-lab{background-color:var(--surface2);font-weight:600;cursor:default;font-family:var(--f-d)}
+.tl-row.hd .tl-lab{background-color:var(--surface)}
+.tl-cells{position:relative;flex:none;background-image:linear-gradient(90deg,transparent 0,transparent calc(var(--cw)*5),var(--wk) calc(var(--cw)*5),var(--wk) calc(var(--cw)*7));background-size:calc(var(--cw)*7) 100%}
+.tl-wk{position:absolute;top:0;height:100%;border-left:1px solid var(--line);font:11px var(--f-m);color:var(--muted);padding:2px 4px;white-space:nowrap}
+.tl-bar{position:absolute;top:6px;height:18px;border-radius:4px;background:var(--c);opacity:.9;cursor:pointer;overflow:hidden;color:#fff;font-size:11px;line-height:18px;padding:0 5px;white-space:nowrap;border:0}
+.tl-bar>i{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.28)}
+.tl-bar span{position:relative}
+.tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--bad);z-index:2;pointer-events:none}
+.tl-svg{position:absolute;pointer-events:none;z-index:1}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.cal .dh{font:600 11px var(--f-m);color:var(--muted);padding:6px;text-align:center;background:var(--surface2)}
+.cal .dc{min-height:86px;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:3px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cal .dc:nth-child(7n+8){border-left:0}
+.cal .dc.off{background:var(--surface2);opacity:.7}
+.cal .dc.td{outline:2px solid var(--accent);outline-offset:-2px}
+.cal .dn{font:11px var(--f-m);color:var(--muted)}
+.cch{all:unset;box-sizing:border-box;cursor:pointer;font-size:11px;line-height:1.3;padding:1px 4px;border-left:3px solid var(--c);background:var(--surface2);border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.cch:hover{background:var(--accent-soft)}
+.wl{display:grid;grid-template-columns:minmax(110px,150px) repeat(6,minmax(64px,1fr));gap:6px;align-items:end;min-width:620px}
+.wl .c{display:flex;flex-direction:column;gap:3px;font:11px var(--f-m);color:var(--muted)}
+.wl .c .bar{height:40px;display:flex;align-items:flex-end;border-radius:4px}
+.wl .c .bar>i{width:100%}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.form label>*:not(span){color:var(--ink)}
+.form .full{grid-column:1/-1}
+.ov{position:fixed;inset:0;background:rgba(10,20,25,.5);z-index:50;display:flex;justify-content:flex-end}
+.dr{background:var(--surface);width:min(560px,100%);height:100%;overflow-y:auto;padding:16px;padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+.dr .sec{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.dr .sec>h3{color:var(--muted);font:600 11px var(--f-m);text-transform:uppercase;letter-spacing:.06em}
+.chk{max-height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px}
+.chk label{display:flex;gap:6px;align-items:flex-start}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;z-index:80;max-width:min(92vw,520px);box-shadow:var(--shadow)}
+.md h3,.md h4,.md h5{margin:10px 0 4px}.md p{margin:4px 0}.md code{font-family:var(--f-m);background:var(--surface2);padding:0 4px;border-radius:3px}
+.docs{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:14px}
+.dl{display:flex;flex-direction:column;gap:4px}
+.dl button{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 8px;border-radius:6px;font-size:13px}
+.dl button:hover{background:var(--surface2)}.dl button[aria-current=true]{background:var(--accent-soft);color:var(--accent)}
+.foot{font-size:12px;color:var(--muted);padding:10px 0 4px;border-top:1px solid var(--line);margin-top:6px}
+details.lic{font-size:12px;color:var(--muted)}details.lic pre{white-space:pre-wrap;font:11px/1.45 var(--f-m);overflow-x:auto}
+.ib{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px}.ib dt{color:var(--muted);font:12px var(--f-m)}.ib dd{margin:0}
+.ng{font:600 11px var(--f-m);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:18px 12px 4px}
+.sess{margin-top:20px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
+.sub{margin:4px 0 0;color:var(--muted);font-size:14px}
+.top{align-items:flex-end;gap:14px}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px}
+@media (max-width:860px){
+ .ng,.sess{display:none}
+ .top h1{font-size:22px}
+ .card{padding:16px}
+ .app{grid-template-columns:minmax(0,1fr);gap:10px}
+ .side{position:static;flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:4px;align-items:center}
+ .brand{padding:0 8px 0 0;white-space:nowrap}.brand small{display:none}
+ .nv{white-space:nowrap}
+ .docs{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="drawer"></div>
+<div id="toast" hidden></div>
+<script>
+(function(){
+'use strict';
+var LS='labpm_v1';
+var STATUSES=['Triage','To do','In progress','In review','Done'];
+var SCOL={'Triage':'--s0','To do':'--s1','In progress':'--s2','In review':'--s3','Done':'--s4'};
+var PRIOS=['Low','Medium','High','Critical'];
+var ROLES=['Admin','Project manager','Researcher','Viewer'];
+var TOOLS=['DSC','TGA','FTIR','Rheometer','Extruder','MFR','Tensile tester','OTR','Other'];
+var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['files','Files'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Session'],['settings','Settings'],['info','Info & license']]]];
+var NAVFLAT=[].concat.apply([],NAV.map(function(g){return g[1]}));
+var DESC={dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Attach files to tasks and projects; copies are stored next to the database.',portfolio:'Project progress and goals.',templates:'Start a project from a ready-made scheme.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',session:'Save your work, reopen it later or move it to another computer.',settings:'People, roles, custom fields and integrations.',info:'Author, license and references.'};
+var MAXSNAP=12;
+var TVIEWS=[['list','List'],['board','Board'],['timeline','Timeline'],['calendar','Calendar'],['workload','Workload']];
+var WN={kpi:'Indicators',status:'Task status',hours:'Hours per project',load:'6-week workload',upcoming:'Upcoming deadlines',conflicts:'Instrument conflicts',assistant:'Project summary'};
+
+/* ---------- date utilities ---------- */
+var pad=function(n){return String(n).padStart(2,'0')};
+var iso=function(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+var pd=function(s){var a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])};
+var addD=function(s,n){var d=pd(s);d.setDate(d.getDate()+n);return iso(d)};
+var isWE=function(d){return d.getDay()===0||d.getDay()===6};
+var normWD=function(s){var d=pd(s);while(isWE(d))d.setDate(d.getDate()+1);return iso(d)};
+var nextWD=function(s){var d=pd(addD(s,1));while(isWE(d))d.setDate(d.getDate()+1);return iso(d)};
+var addWD=function(s,n){var c=normWD(s);for(var i=0;i<n;i++)c=nextWD(c);return c};
+var diffWD=function(a,b){var n=0,c=a;while(c<b&&n<500){c=nextWD(c);n++}return n};
+var diffD=function(a,b){return Math.round((pd(b)-pd(a))/864e5)};
+var TODAY=function(){return iso(new Date())};
+var mondayOf=function(s){var d=pd(s);d.setDate(d.getDate()-((d.getDay()+6)%7));return iso(d)};
+var fd=function(s){return s?pd(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'—'};
+var nf=function(x,d){return Number(x).toLocaleString('en-GB',{maximumFractionDigits:d==null?1:d})};
+
+/* ---------- general utilities ---------- */
+var $=function(s,r){return (r||document).querySelector(s)};
+var uid=function(p){return p+Math.random().toString(36).slice(2,8)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var ini=function(n){return String(n||'').replace(/[^A-Za-zÀ-ÿ ]/g,' ').trim().split(/\s+/).map(function(x){return x[0]}).join('').slice(0,2).toUpperCase()};
+function opt(arr,val){return arr.map(function(a){var v=Array.isArray(a)?a[0]:a,l=Array.isArray(a)?a[1]:a;return '<option value="'+esc(v)+'"'+(String(v)===String(val)?' selected':'')+'>'+esc(l)+'</option>'}).join('')}
+
+/* ---------- state ---------- */
+var S;
+function defaultUI(){var d=new Date();return {view:'dashboard',theme:'light',saved:0,tview:'list',q:'',fp:'',fa:'',fs:'',fpr:'',fdf:'',fdt:'',group:'none',cal:d.getFullYear()+'-'+pad(d.getMonth()+1),widgets:{kpi:1,status:1,hours:1,load:1,upcoming:1,conflicts:1,assistant:1},doc:null,drawer:null,confirmDel:null,ap:null,tpl:null,rb:{name:'',tt:'status_to',tv:'Done',ct:'none',cv:'',at:'notify',av:''}}}
+function seed(){
+  var B=mondayOf(TODAY());
+  var D=function(n){return normWD(addD(B,n))};
+  var users=[{id:'u1',name:'A. Rossi',role:'Admin',cap:40},{id:'u5',name:'C. Gallo',role:'Project manager',cap:30},{id:'u2',name:'L. Bianchi',role:'Researcher',cap:36},{id:'u3',name:'M. Verdi',role:'Researcher',cap:40},{id:'u4',name:'S. Neri',role:'Researcher',cap:24}];
+  var projects=[{id:'p1',name:'Compound PP-g-MAH, campaign 03',c:0,status:'auto'},{id:'p2',name:'PE/EVOH/PE film, O₂ barrier',c:1,status:'auto'},{id:'p3',name:'Instrument calibrations Q4',c:2,status:'auto'},{id:'p4',name:'Internal requests',c:5,status:'auto'}];
+  var fields=[{id:'f1',name:'Instrument',type:'select',options:TOOLS.slice()},{id:'f2',name:'No. of samples',type:'number'},{id:'f3',name:'Lot',type:'text'},{id:'f4',name:'Hours per sample',type:'formula',formula:'{est}/{No. of samples}'}];
+  var L=function(u,d,h,n){return {id:uid('l'),u:u,date:D(d),h:h,note:n}};
+  var mk=function(id,p,title,st,as,pr,s,d,est,deps,tags,cf,log){return {id:id,projectId:p,title:title,status:st,assignee:as,priority:pr,start:D(s),due:D(d),est:est,deps:deps||[],tags:tags||[],cf:cf||{},notes:'',log:log||[],timer:null,created:Date.now()}};
+  var tasks=[
+   mk('t1','p1','Drying of PP and maleic anhydride','Done','u2','Medium',-14,-12,6,[],[],{f1:'Other',f3:'PP-03A'},[L('u2',-14,3,'Vacuum oven'),L('u2',-13,3.5,'Weighing and premixing')]),
+   mk('t2','p1','Twin-screw extrusion: grafting trial','Done','u3','High',-11,-7,16,['t1'],['to-archive'],{f1:'Extruder',f2:8,f3:'PP-03A'},[L('u3',-11,6,'Thermal profile setup'),L('u3',-10,7,'Run 1-4'),L('u3',-9,5,'Run 5-8')]),
+   mk('t3','p1','DSC on pellets (ASTM D3418)','In progress','u2','High',-4,1,8,['t2'],[],{f1:'DSC',f2:8,f3:'PP-03A'},[L('u2',-4,3,'Pan preparation'),L('u2',-3,2,'Run 1-4')]),
+   mk('t4','p1','FTIR: MAH quantification','In progress','u4','High',-2,3,10,['t2'],[],{f1:'FTIR',f2:8,f3:'PP-03A'},[L('u4',-2,2.5,'Pressed films')]),
+   mk('t5','p1','MFR (ISO 1133-1), 230 °C / 2.16 kg','To do','u3','Medium',2,4,5,['t2'],[],{f1:'MFR',f2:8,f3:'PP-03A'}),
+   mk('t6','p1','Campaign 03 report','To do','u1','Medium',5,9,12,['t3','t4','t5'],[],{}),
+   mk('t7','p2','PE/EVOH/PE structure definition','Done','u1','Medium',-10,-8,6,[],[],{},[L('u1',-10,3,'Thickness selection'),L('u1',-9,2.5,'Review with production')]),
+   mk('t8','p2','Film coextrusion (blown)','In progress','u3','Critical',-1,2,20,['t7'],['extrusion'],{f1:'Extruder',f2:6,f3:'FL-11'},[L('u3',-1,6,'Line start-up')]),
+   mk('t9','p1','Twin-screw extrusion: campaign 04','To do','u3','Medium',1,3,14,[],[],{f1:'Extruder',f2:8,f3:'PP-04A'}),
+   mk('t10','p2','Film OTR (ASTM D3985)','To do','u4','High',3,6,8,['t8'],[],{f1:'OTR',f2:6,f3:'FL-11'}),
+   mk('t11','p2','Film tensile test (ISO 527-3)','To do','u2','Medium',3,5,6,['t8'],[],{f1:'Tensile tester',f2:6,f3:'FL-11'}),
+   mk('t12','p2','O₂ barrier report','To do','u1','Medium',7,10,8,['t10','t11'],[],{}),
+   mk('t13','p3','DSC calibration (indium/zinc)','To do','u2','High',-3,-1,4,[],[],{f1:'DSC'}),
+   mk('t14','p3','Analytical balance calibration','Done','u4','Medium',-5,-4,3,[],[],{},[L('u4',-5,2,'Reference weights')]),
+   mk('t15','p3','Rheometer check with standard oil','To do','u4','Medium',6,7,3,[],[],{f1:'Rheometer'}),
+   mk('t16','p4','Request: DSC on 6 recycled PET samples','Triage',null,'Medium',3,7,0,[],['request'],{f1:'DSC',f2:6,f3:'PET-R-02'})
+  ];
+  tasks[15].src='form';tasks[15].requester='Production';
+  var goals=[{id:'g1',name:'Close campaign 03 PP-g-MAH',target:D(9),pids:['p1']},{id:'g2',name:'Film O₂ barrier data',target:D(10),pids:['p2']}];
+  var rules=[
+   {id:'r1',name:'Sample archive',on:true,trigger:{type:'status_to',value:'Done'},cond:{type:'tag',value:'to-archive'},action:{type:'create_task',value:'Archive residual samples'}},
+   {id:'r2',name:'Flag overdue tasks',on:true,trigger:{type:'overdue',value:''},cond:{type:'none',value:''},action:{type:'add_tag',value:'overdue'}},
+   {id:'r3',name:'New requests to triage',on:true,trigger:{type:'created',value:''},cond:{type:'project',value:'p4'},action:{type:'set_status',value:'Triage'}}];
+  var docs=[{id:'d1',title:'Campaign 03 plan',projectId:'p1',taskId:null,updated:Date.now(),body:'# Campaign 03 plan\n\n- Matrix: PP homopolymer, MAH 1.0 wt%\n- Thermal profile and screw speed: see extrusion log\n- Characterization: DSC, FTIR, MFR\n\n**Acceptance criterion**: to be defined with the laboratory manager.'}];
+  return {v:1,me:'u1',users:users,projects:projects,tasks:tasks,fields:fields,rules:rules,goals:goals,docs:docs,files:[],activity:[],ui:defaultUI(),demo:true};
+}
+
+
+var ID=/^[A-Za-z0-9_-]{1,40}$/,DT=/^\d{4}-\d{2}-\d{2}$/;
+var lsOK=true;
+function normSession(o){
+  if(!o||typeof o!=='object'||o.v!==1)return null;
+  var keys=['users','projects','tasks','fields','rules','goals','docs'],i,j;
+  for(i=0;i<keys.length;i++){var a=o[keys[i]];if(!Array.isArray(a)||a.length>5000)return null;for(j=0;j<a.length;j++){if(!a[j]||typeof a[j]!=='object'||typeof a[j].id!=='string'||!ID.test(a[j].id))return null}}
+  var ok=true,S1=function(x){return String(x==null?'':x)};
+  o.users.forEach(function(u){u.name=S1(u.name);if(ROLES.indexOf(u.role)<0)u.role='Viewer';u.cap=Math.max(0,Number(u.cap)||0)});
+  o.projects.forEach(function(p){p.name=S1(p.name);p.c=Number(p.c)||0;p.status=S1(p.status)||'auto'});
+  o.fields.forEach(function(f){f.name=S1(f.name);if(['text','number','select','date','checkbox','formula'].indexOf(f.type)<0)f.type='text';if(f.type==='select')f.options=Array.isArray(f.options)?f.options.map(S1):[];if(f.type==='formula')f.formula=S1(f.formula)});
+  o.tasks.forEach(function(t){
+    if(!DT.test(S1(t.start))||!DT.test(S1(t.due)))ok=false;
+    t.title=S1(t.title);if(STATUSES.indexOf(t.status)<0)t.status='To do';if(PRIOS.indexOf(t.priority)<0)t.priority='Medium';
+    t.est=Math.max(0,Number(t.est)||0);t.projectId=S1(t.projectId);t.assignee=t.assignee?S1(t.assignee):null;t.notes=S1(t.notes);t.timer=null;
+    t.deps=Array.isArray(t.deps)?t.deps.filter(function(d){return typeof d==='string'&&ID.test(d)}):[];
+    t.tags=Array.isArray(t.tags)?t.tags.map(S1):[];t.cf=t.cf&&typeof t.cf==='object'?t.cf:{};
+    t.log=Array.isArray(t.log)?t.log.filter(function(l){return l&&typeof l.id==='string'&&ID.test(l.id)&&DT.test(S1(l.date))&&isFinite(Number(l.h))}).map(function(l){return {id:l.id,u:S1(l.u),date:l.date,h:Number(l.h),note:S1(l.note)}}):[]});
+  if(!ok)return null;
+  var TR=['status_to','created','overdue'],CT=['none','project','priority','tag'],AT=['notify','set_assignee','set_priority','set_status','add_tag','create_task'];
+  o.rules=o.rules.filter(function(r){return r.trigger&&TR.indexOf(r.trigger.type)>=0&&r.cond&&CT.indexOf(r.cond.type)>=0&&r.action&&AT.indexOf(r.action.type)>=0});
+  o.rules.forEach(function(r){r.name=S1(r.name);r.on=!!r.on;r.trigger.value=S1(r.trigger.value);r.cond.value=S1(r.cond.value);r.action.value=S1(r.action.value)});
+  o.goals.forEach(function(g){g.name=S1(g.name);if(!DT.test(S1(g.target)))g.target=iso(new Date());g.pids=Array.isArray(g.pids)?g.pids.filter(function(x){return typeof x==='string'&&ID.test(x)}):[]});
+  o.docs.forEach(function(d){d.title=S1(d.title);d.body=S1(d.body);d.projectId=S1(d.projectId);d.taskId=S1(d.taskId);d.updated=Number(d.updated)||Date.now()});
+  o.files=(Array.isArray(o.files)?o.files:[]).filter(function(f){return f&&typeof f==='object'&&typeof f.id==='string'&&ID.test(f.id)&&typeof f.path==='string'}).slice(0,5000).map(function(f){return {id:f.id,taskId:S1(f.taskId),projectId:S1(f.projectId),name:S1(f.name),path:S1(f.path),size:Math.max(0,Number(f.size)||0),type:S1(f.type),added:Number(f.added)||0,by:S1(f.by)}});
+  o.activity=(Array.isArray(o.activity)?o.activity:[]).filter(function(a){return a&&typeof a==='object'}).slice(0,300).map(function(a){return {t:Number(a.t)||0,u:S1(a.u),m:S1(a.m)}});
+  if(!o.users.some(function(u){return u.id===o.me}))o.me=o.users[0]?o.users[0].id:'';
+  var d0=defaultUI(),u=o.ui&&typeof o.ui==='object'?o.ui:{};
+  u=Object.assign(d0,u);u.widgets=Object.assign(defaultUI().widgets,u.widgets&&typeof u.widgets==='object'?u.widgets:{});
+  if(!NAVFLAT.some(function(n){return n[0]===u.view}))u.view='dashboard';
+  if(!TVIEWS.some(function(n){return n[0]===u.tview}))u.tview='list';
+  if(['light','dark','auto'].indexOf(u.theme)<0)u.theme='light';
+  if(!/^\d{4}-\d{2}$/.test(S1(u.cal)))u.cal=defaultUI().cal;
+  ['q','fp','fa','fs','fpr','group'].forEach(function(k){u[k]=S1(u[k])});
+  ['fdf','fdt'].forEach(function(k){u[k]=DT.test(S1(u[k]))?u[k]:''});
+  ['fpj','ftk','ffp'].forEach(function(k){u[k]=S1(u[k])});
+  u.rb=defaultUI().rb;u.drawer=null;u.confirmDel=null;u.confirmReset=false;u.confirmSnap=null;u.confirmClear=false;u.tpl=null;u.doc=u.doc?S1(u.doc):null;u.ap=u.ap?S1(u.ap):null;
+  o.ui=u;return o}
+function load(){try{var r=localStorage.getItem(LS);if(r){var o=normSession(JSON.parse(r));if(o)return o}}catch(e){}return null}
+function hhmm(ts){return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function savedText(){var f=FS&&FS.h&&FS.on?(FS.err?' · folder: error':FS.last?' · folder '+hhmm(FS.last):' · folder: pending'):'';if(!lsOK)return 'Browser autosave unavailable: save to a file.'+f;return S&&S.ui&&S.ui.saved?'Autosaved at '+hhmm(S.ui.saved)+f:'Ready'}
+function save(){S.ui.saved=Date.now();try{localStorage.setItem(LS,JSON.stringify(S));lsOK=true}catch(e){lsOK=false}var el=document.getElementById('sv');if(el)el.textContent=savedText();folderSchedule()}
+function applyTheme(){var t=S&&S.ui&&S.ui.theme||'light',r=document.documentElement;if(t==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t)}
+var SNAPK='labpm_snaps_v1';
+function getSnaps(){try{var a=JSON.parse(localStorage.getItem(SNAPK));return Array.isArray(a)?a.filter(function(s){return s&&typeof s.id==='string'&&ID.test(s.id)}):[]}catch(e){return []}}
+function putSnaps(a){try{localStorage.setItem(SNAPK,JSON.stringify(a));return true}catch(e){return false}}
+function snapData(){var o=JSON.parse(JSON.stringify(S));o.ui.drawer=null;o.ui.confirmDel=null;o.ui.confirmReset=false;o.ui.confirmSnap=null;o.ui.confirmClear=false;return o}
+function autoSnap(){var a=getSnaps().filter(function(s){return s.auto!==true});a.unshift({id:uid('s'),name:'Automatic, before replacement',ts:Date.now(),auto:true,data:snapData()});if(a.length>MAXSNAP)a.length=MAXSNAP;putSnaps(a)}
+
+function log(m){S.activity.unshift({t:Date.now(),u:S.me,m:m});if(S.activity.length>300)S.activity.length=300}
+var toastT;
+function toast(m){var e=$('#toast');e.textContent=m;e.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){e.hidden=true},3600)}
+
+/* ---------- accessors and permissions ---------- */
+var T=function(id){return S.tasks.find(function(t){return t.id===id})};
+var P=function(id){return S.projects.find(function(p){return p.id===id})};
+var Uu=function(id){return S.users.find(function(u){return u.id===id})};
+var uname=function(id){var u=Uu(id);return u?u.name:'—'};
+var me=function(){return Uu(S.me)||S.users[0]};
+var role=function(){return me().role};
+var isAdmin=function(){return role()==='Admin'};
+var isPM=function(){return role()==='Admin'||role()==='Project manager'};
+var canEdit=function(t){return isPM()||(role()==='Researcher'&&t.assignee===S.me)};
+var logged=function(t){return t.log.reduce(function(a,l){return a+l.h},0)};
+var isOver=function(t){return t.status!=='Done'&&t.due<TODAY()};
+var isBlocked=function(t){return t.deps.some(function(d){var x=T(d);return x&&x.status!=='Done'})};
+var blockers=function(t){return t.deps.map(T).filter(function(x){return x&&x.status!=='Done'})};
+function pProgress(pid){var ts=S.tasks.filter(function(t){return t.projectId===pid});if(!ts.length)return 0;var w=ts.reduce(function(a,t){return a+(t.est||1)},0),d=ts.filter(function(t){return t.status==='Done'}).reduce(function(a,t){return a+(t.est||1)},0);return Math.round(100*d/w)}
+function pHealth(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id});if(p.status&&p.status!=='auto')return p.status;if(ts.length&&ts.every(function(t){return t.status==='Done'}))return 'Done';return ts.some(isOver)?'At risk':'On track'}
+function dependsOn(a,b,seen){seen=seen||{};if(seen[a])return false;seen[a]=1;var x=T(a);if(!x)return false;return x.deps.some(function(d){return d===b||dependsOn(d,b,seen)})}
+
+/* ---------- custom fields: formulas ---------- */
+function evalExpr(s){var i=0;
+  function ws(){while(s[i]===' ')i++}
+  function num(){ws();var m=/^[0-9]*\.?[0-9]+(?:[eE][+-]?\d+)?/.exec(s.slice(i));if(!m)throw 0;i+=m[0].length;return parseFloat(m[0])}
+  function fac(){ws();if(s[i]==='-'){i++;return -fac()}if(s[i]==='+'){i++;return fac()}if(s[i]==='('){i++;var v=expr();ws();if(s[i]!==')')throw 0;i++;return v}return num()}
+  function term(){var v=fac();for(;;){ws();if(s[i]==='*'){i++;v*=fac()}else if(s[i]==='/'){i++;v/=fac()}else return v}}
+  function expr(){var v=term();for(;;){ws();if(s[i]==='+'){i++;v+=term()}else if(s[i]==='-'){i++;v-=term()}else return v}}
+  var r=expr();ws();if(i<s.length)throw 0;return r}
+function calc(t,f){var bad=false;var ex=String(f.formula||'').replace(/\{([^}]+)\}/g,function(m,n){n=n.trim();var v;if(n==='est')v=t.est;else if(n==='logged')v=logged(t);else{var g=S.fields.find(function(x){return x.name===n&&x.type==='number'});v=g?parseFloat(t.cf[g.id]):NaN}if(!isFinite(v)){bad=true;return '0'}return '('+v+')'});
+  if(bad||!ex.trim())return null;try{var r=evalExpr(ex);return isFinite(r)?r:null}catch(e){return null}}
+function cfv(t,f){if(f.type==='formula'){var r=calc(t,f);return r==null?'—':nf(r,2)}var v=t.cf[f.id];if(f.type==='checkbox')return v?'yes':'';if(f.type==='date')return v?fd(v):'';return v==null?'':String(v)}
+
+/* ---------- tasks: creation, status, dates, cascade ---------- */
+function newTask(o){var t=Object.assign({id:uid('t'),projectId:S.projects[0]&&S.projects[0].id,title:'New task',status:'To do',assignee:null,priority:'Medium',start:normWD(TODAY()),due:normWD(TODAY()),est:0,deps:[],tags:[],cf:{},notes:'',log:[],timer:null,created:Date.now()},o);S.tasks.push(t);return t}
+function cascadeFrom(p,seen){seen=seen||{};if(seen[p.id]||p.status==='Done')return 0;seen[p.id]=1;var n=0;
+  S.tasks.filter(function(x){return x.deps.indexOf(p.id)>=0&&x.status!=='Done'}).forEach(function(x){
+    if(x.start<=p.due){var dur=diffWD(x.start,x.due),ns=nextWD(p.due);x.start=ns;x.due=addWD(ns,dur);x.ovFired=false;n++;n+=cascadeFrom(x,seen)}});
+  return n}
+function setDates(t,s,d){t.start=s;t.due=d;t.ovFired=false;log('Dates of "'+t.title+'": '+fd(s)+' → '+fd(d));return cascadeFrom(t)}
+function applyStatus(t,st,depth,fromRule){
+  if(t.status===st)return true;
+  if(!fromRule&&st!=='Triage'&&st!=='To do'&&isBlocked(t)){toast('Blocked by: '+blockers(t).map(function(x){return x.title}).join('; '));return false}
+  t.status=st;log('"'+t.title+'" → '+st);
+  if(st==='Done'&&t.timer)stopTimer(t,true);
+  fire({type:'status_to',value:st},t,depth||0);return true}
+
+/* ---------- automations ---------- */
+function condOK(c,t){if(!c||c.type==='none')return true;if(c.type==='project')return t.projectId===c.value;if(c.type==='priority')return t.priority===c.value;if(c.type==='tag')return t.tags.indexOf(c.value)>=0;return true}
+function fire(tr,t,depth){depth=depth||0;if(depth>3)return;
+  S.rules.filter(function(r){return r.on&&r.trigger.type===tr.type&&(tr.type!=='status_to'||r.trigger.value===tr.value)&&condOK(r.cond,t)}).forEach(function(r){
+    var a=r.action;
+    if(a.type==='set_assignee')t.assignee=a.value||null;
+    else if(a.type==='set_priority')t.priority=a.value;
+    else if(a.type==='set_status')applyStatus(t,a.value,depth+1,true);
+    else if(a.type==='add_tag'){if(t.tags.indexOf(a.value)<0)t.tags.push(a.value)}
+    else if(a.type==='create_task'){var s=nextWD(TODAY());var n=newTask({projectId:t.projectId,title:a.value,status:'To do',assignee:t.assignee,start:s,due:addWD(s,2)});fire({type:'created'},n,depth+1)}
+    else if(a.type==='notify')toast(a.value+' ("'+t.title+'")');
+    log('Automation "'+r.name+'" on "'+t.title+'"')})}
+function checkOverdue(){var ch=false;S.tasks.forEach(function(t){if(isOver(t)&&!t.ovFired){t.ovFired=true;fire({type:'overdue'},t,0);ch=true}});if(ch)save();return ch}
+
+/* ---------- timer ---------- */
+function elapsed(t){var s=Math.max(0,Math.floor((Date.now()-t.timer.start)/1000));return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60)}
+function stopTimer(t,quiet){if(!t.timer)return;var h=Math.round((Date.now()-t.timer.start)/36e5*100)/100;if(h>=0.01)t.log.push({id:uid('l'),u:t.timer.user,date:TODAY(),h:h,note:'Timer'});t.timer=null;log('Timer stopped on "'+t.title+'" ('+nf(h,2)+' h)');if(!quiet)toast('Logged '+nf(h,2)+' h')}
+
+/* ---------- workload and conflicts ---------- */
+function workload(weeks){var mon=mondayOf(TODAY()),res={};
+  S.tasks.filter(function(t){return t.status!=='Done'}).forEach(function(t){
+    var rem=Math.max(t.est-logged(t),0);if(!rem)return;
+    var days=[],c=normWD(t.start),g=0;while(c<=t.due&&g<400){days.push(c);c=nextWD(c);g++}
+    if(!days.length)days.push(normWD(t.start));
+    var per=rem/days.length,k=t.assignee||'';res[k]=res[k]||Array(weeks).fill(0);
+    days.forEach(function(dd){var i=Math.max(0,Math.floor(diffD(mon,dd)/7));if(i<weeks)res[k][i]+=per})});
+  return {res:res,mon:mon}}
+function conflicts(){var f=S.fields.find(function(x){return x.name==='Instrument'});if(!f)return [];var out=[];
+  var ts=S.tasks.filter(function(t){return t.status!=='Done'&&t.cf[f.id]&&t.cf[f.id]!=='Other'});
+  for(var i=0;i<ts.length;i++)for(var j=i+1;j<ts.length;j++){var a=ts[i],b=ts[j];if(a.cf[f.id]===b.cf[f.id]&&a.start<=b.due&&b.start<=a.due)out.push([a,b,a.cf[f.id]])}
+  return out}
+
+/* ---------- HTML components ---------- */
+function st(s){return '<span class="pill" style="--c:var('+SCOL[s]+')"><i></i>'+esc(s)+'</span>'}
+function pr(p){return '<span class="pr'+PRIOS.indexOf(p)+'">'+esc(p)+'</span>'}
+function pdot(p){return p?'<span class="dot" style="--c:var(--p'+(p.c%6)+')"></span>':''}
+function flags(t){var h='';if(isOver(t))h+=' <span class="flag bad">overdue</span>';if(isBlocked(t)&&t.status!=='Done')h+=' <span class="flag warn">blocked</span>';return h}
+function md(s){var inl=false,out='';
+  var il=function(x){return x.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>')};
+  esc(s).split('\n').forEach(function(l){
+    if(/^\s*[-*] /.test(l)){if(!inl){out+='<ul>';inl=true}out+='<li>'+il(l.replace(/^\s*[-*] /,''))+'</li>'}
+    else{if(inl){out+='</ul>';inl=false}var h=l.match(/^(#{1,3}) (.*)$/);if(h)out+='<h'+(h[1].length+2)+'>'+il(h[2])+'</h'+(h[1].length+2)+'>';else if(l.trim())out+='<p>'+il(l)+'</p>'}});
+  return out+(inl?'</ul>':'')}
+var pOpts=function(){return S.projects.map(function(p){return [p.id,p.name]})};
+var uOpts=function(){return [['','— none —']].concat(S.users.map(function(u){return [u.id,u.name]}))};
+
+/* ---------- shell ---------- */
+function render(){
+  var v=S.ui.view,titles={};NAVFLAT.forEach(function(n){titles[n[0]]=n[1]});
+  var rt=S.tasks.find(function(t){return t.timer&&t.timer.user===S.me});
+  var nav=NAV.map(function(g){return '<div class="ng">'+g[0]+'</div>'+g[1].map(function(n){return '<button class="nv" data-act="nav" data-v="'+n[0]+'"'+(v===n[0]?' aria-current="page"':'')+'>'+n[1]+'</button>'}).join('')}).join('');
+  var th=[['light','Light'],['dark','Dark'],['auto','Auto']].map(function(x){return '<button data-act="theme" data-v="'+x[0]+'" aria-pressed="'+(S.ui.theme===x[0])+'">'+x[1]+'</button>'}).join('');
+  $('#app').innerHTML='<div class="app"><nav class="side" aria-label="Sections"><div class="brand">LabPM<small>v1.3 · chemical laboratory</small></div>'+nav+
+    '<div class="sess"><div class="small muted" id="sv">'+esc(savedText())+'</div><button class="btn sm" data-act="nav" data-v="session">Save or open session</button></div></nav>'+
+    '<main class="main"><header class="top"><div><h1>'+esc(titles[v])+'</h1><p class="sub">'+esc(DESC[v]||'')+'</p></div><div class="topr">'+
+    (rt?'<button class="btn tmr" id="tb" data-act="open" data-id="'+rt.id+'"><span class="rec"></span><span id="tbt">'+elapsed(rt)+'</span></button>':'')+
+    '<div class="seg" role="group" aria-label="Theme">'+th+'</div>'+
+    '<label class="who">User <select data-ch="me">'+opt(S.users.map(function(u){return [u.id,u.name+' · '+u.role]}),S.me)+'</select></label></div></header>'+
+    '<div id="vb">'+body()+'</div>'+
+    '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a> · LabPM v1.3 · data stays in this browser until you save the session to a file</footer></main></div>'}
+function renderBody(){var e=$('#vb');if(e)e.innerHTML=body()}
+function commit(){save();renderBody();renderDrawer();var tb=$('#tb');if(!tb&&S.tasks.some(function(t){return t.timer&&t.timer.user===S.me})||tb&&!S.tasks.some(function(t){return t.timer&&t.timer.user===S.me}))render()}
+function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
+
+/* ---------- dashboard ---------- */
+function wKpi(){var op=S.tasks.filter(function(t){return t.status!=='Done'}),ov=op.filter(isOver).length,bl=op.filter(isBlocked).length;
+  var est=op.reduce(function(a,t){return a+t.est},0),lg=op.reduce(function(a,t){return a+logged(t)},0),risk=S.projects.filter(function(p){return pHealth(p)==='At risk'}).length;
+  var k=function(v,l){return '<div><b>'+v+'</b><span>'+l+'</span></div>'};
+  return '<section class="card full"><div class="kpis">'+k(op.length,'open tasks')+k(ov,'overdue')+k(bl,'blocked by dependencies')+k(nf(lg)+' / '+nf(est)+' h','hours logged / estimated (open)')+k(risk,'projects at risk')+k(conflicts().length,'instrument conflicts')+'</div></section>'}
+function wStatus(){var mx=Math.max(1,Math.max.apply(null,STATUSES.map(function(s){return S.tasks.filter(function(t){return t.status===s}).length})));
+  return '<section class="card"><h2>Task status</h2><div class="lst">'+STATUSES.map(function(s){var n=S.tasks.filter(function(t){return t.status===s}).length;return '<div><span style="min-width:110px">'+st(s)+'</span><span class="grow" style="flex:1"><div class="bar"><i style="width:'+(100*n/mx)+'%;background:var('+SCOL[s]+')"></i></div></span><span class="mono">'+n+'</span></div>'}).join('')+'</div></section>'}
+function wHours(){var rows=S.projects.map(function(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id});return {p:p,e:ts.reduce(function(a,t){return a+t.est},0),l:ts.reduce(function(a,t){return a+logged(t)},0)}});
+  var mx=Math.max(1,Math.max.apply(null,rows.map(function(r){return Math.max(r.e,r.l)})));
+  return '<section class="card"><h2>Hours per project</h2><div class="lst">'+rows.map(function(r){return '<div style="display:block"><div class="small">'+pdot(r.p)+esc(r.p.name)+' <span class="mono muted">'+nf(r.l)+' / '+nf(r.e)+' h</span></div><div class="bar" style="margin:3px 0"><i style="width:'+(100*r.e/mx)+'%;background:var(--line)"></i></div><div class="bar"><i style="width:'+(100*r.l/mx)+'%"></i></div></div>'}).join('')+'</div><p class="small muted" style="margin:8px 0 0">Grey bar: estimated hours. Coloured bar: logged hours.</p></section>'}
+function wLoad(){var w=workload(6);var rows=S.users.map(function(u){return [u.name,u.cap,w.res[u.id]||Array(6).fill(0)]});
+  return '<section class="card"><h2>Workload, next 6 weeks</h2><div class="lst">'+rows.map(function(r){return '<div><span style="min-width:90px">'+esc(r[0])+'</span><span class="row" style="gap:3px;flex:1">'+r[2].map(function(h){var q=h/r[1];return '<span class="grow" title="'+nf(h)+' h of '+r[1]+' h"><div class="bar '+(q>1?'b':q>.85?'w':'g')+'"><i style="width:'+Math.min(100,100*q)+'%"></i></div></span>'}).join('')+'</span></div>'}).join('')+'</div><p class="small muted" style="margin:8px 0 0">Each bar is one week starting from the current one; red above capacity.</p></section>'}
+function wUp(){var ts=S.tasks.filter(function(t){return t.status!=='Done'&&t.due<=addD(TODAY(),7)}).sort(function(a,b){return a.due<b.due?-1:1}).slice(0,8);
+  return '<section class="card"><h2>Deadlines within 7 days</h2>'+(ts.length?'<div class="lst">'+ts.map(function(t){return '<div><button class="btn sm" data-act="open" data-id="'+t.id+'">'+fd(t.due)+'</button><span class="grow" style="flex:1">'+esc(t.title)+flags(t)+'</span><span class="small muted">'+esc(uname(t.assignee))+'</span></div>'}).join('')+'</div>':'<p class="muted">No imminent deadlines.</p>')+'</section>'}
+function wConf(){var c=conflicts();return '<section class="card"><h2>Instrument conflicts</h2>'+(c.length?'<div class="lst">'+c.map(function(x){return '<div><span><span class="tag">'+esc(x[2])+'</span> '+esc(x[0].title)+' ↔ '+esc(x[1].title)+'</span><button class="btn sm" data-act="open" data-id="'+x[0].id+'">Open</button></div>'}).join('')+'</div>':'<p class="muted">No overlaps on the same instrument.</p>')+'<p class="small muted" style="margin:8px 0 0">Computed from the "Instrument" field on tasks that are not done.</p></section>'}
+function summary(pid){var p=P(pid);if(!p)return [];var ts=S.tasks.filter(function(t){return t.projectId===pid}),op=ts.filter(function(t){return t.status!=='Done'});
+  var out=['Progress '+pProgress(pid)+'% ('+(ts.length-op.length)+' of '+ts.length+' tasks done).'];
+  var ov=op.filter(isOver);out.push(ov.length?'Overdue: '+ov.map(function(t){return t.title+' (due '+fd(t.due)+')'}).join('; ')+'.':'No overdue tasks.');
+  var bl=op.filter(isBlocked);if(bl.length)out.push('Blocked: '+bl.map(function(t){return t.title+' ← '+blockers(t).map(function(b){return b.title}).join(', ')}).join('; ')+'.');
+  var crit=ov.filter(function(t){return S.tasks.some(function(x){return x.deps.indexOf(t.id)>=0&&x.status!=='Done'})});if(crit.length)out.push('Delays blocking other tasks: '+crit.map(function(t){return t.title}).join('; ')+'.');
+  var nx=op.filter(function(t){return !isBlocked(t)}).sort(function(a,b){return a.due<b.due?-1:1})[0];if(nx)out.push('Next unblocked task by due date: '+nx.title+' ('+fd(nx.due)+').');
+  var e=ts.reduce(function(a,t){return a+t.est},0),l=ts.reduce(function(a,t){return a+logged(t)},0);out.push('Hours logged '+nf(l)+' of '+nf(e)+' estimated.');return out}
+function wAssist(){var pid=S.ui.ap||(S.projects[0]&&S.projects[0].id);
+  return '<section class="card"><h2>Project summary</h2><div class="tools"><select data-ch="ap">'+opt(pOpts(),pid)+'</select></div><ul>'+summary(pid).map(function(l){return '<li>'+esc(l)+'</li>'}).join('')+'</ul><p class="small muted" style="margin:0">Generated by fixed rules on task data, without generative AI.</p></section>'}
+function vDash(){var W=S.ui.widgets,fn={kpi:wKpi,status:wStatus,hours:wHours,load:wLoad,upcoming:wUp,conflicts:wConf,assistant:wAssist};
+  return '<details class="wcfg"><summary>Visible widgets</summary>'+Object.keys(WN).map(function(k){return '<label><input type="checkbox" data-ch="widget" data-k="'+k+'"'+(W[k]?' checked':'')+'> '+WN[k]+'</label>'}).join('')+'</details><div class="wgrid">'+Object.keys(WN).filter(function(k){return W[k]}).map(function(k){return fn[k]()}).join('')+'</div>'}
+
+/* ---------- portfolio and goals ---------- */
+function vPort(){
+  var rows=S.projects.map(function(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id}),h=pHealth(p),pg=pProgress(p.id);
+    var s=ts.map(function(t){return t.start}).sort()[0],d=ts.map(function(t){return t.due}).sort().slice(-1)[0];
+    return '<tr><td>'+pdot(p)+'<b>'+esc(p.name)+'</b></td><td><select data-ch="pstat" data-id="'+p.id+'"'+(isPM()?'':' disabled')+'>'+opt([['auto','Auto: '+(pHealth(Object.assign({},p,{status:'auto'})))],'On track','At risk','On hold','Done'],p.status||'auto')+'</select></td><td style="min-width:130px"><div class="bar'+(h==='At risk'?' b':'')+'"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></td><td class="mono small">'+fd(s)+' → '+fd(d)+'</td><td class="mono">'+ts.filter(function(t){return t.status!=='Done'}).length+' open, '+ts.filter(isOver).length+' overdue</td><td class="mono">'+nf(ts.reduce(function(a,t){return a+logged(t)},0))+' / '+nf(ts.reduce(function(a,t){return a+t.est},0))+' h</td><td><button class="btn sm" data-act="projdoc" data-id="'+p.id+'">Notes</button></td></tr>'}).join('');
+  var goals=S.goals.map(function(g){var pg=g.pids.length?Math.round(g.pids.reduce(function(a,id){return a+pProgress(id)},0)/g.pids.length):0,late=g.target<TODAY()&&pg<100;
+    return '<div style="display:block"><div class="row"><b class="grow">'+esc(g.name)+'</b><span class="small mono">by '+fd(g.target)+'</span>'+(late?'<span class="flag bad">past due</span>':'')+(isPM()?'<button class="btn sm dng" data-act="goaldel" data-id="'+g.id+'">Remove</button>':'')+'</div><div class="small muted">'+g.pids.map(function(id){return esc((P(id)||{}).name)}).join(', ')+'</div><div class="bar" style="margin-top:4px"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></div>'}).join('');
+  return '<div class="tbw"><table class="tbl"><thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Period</th><th>Tasks</th><th>Hours</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+   (isPM()?'<section class="card"><h2>New project</h2><div class="tools"><input id="np-name" placeholder="Project name" style="flex:1;min-width:200px"><button class="btn pri" data-act="projadd">Add</button></div></section>':'')+
+   '<section class="card"><h2>Goals</h2><div class="lst">'+(goals||'<p class="muted">No goals.</p>')+'</div>'+
+   (isPM()?'<div class="form" style="margin-top:12px"><label>Goal<input id="ng-name" placeholder="E.g. Validate the FTIR method"></label><label>Due date<input type="date" id="ng-date" value="'+addD(TODAY(),30)+'"></label><label>Linked projects<select id="ng-p" multiple size="3">'+opt(pOpts())+'</select></label><label class="full"><button class="btn pri" data-act="goaladd" style="width:max-content">Add goal</button></label></div>':'')+'<p class="small muted" style="margin:10px 0 0">Progress is the average of the linked projects, weighted by task estimated hours.</p></section>'}
+
+/* ---------- tasks: toolbar and views ---------- */
+function filtered(){var q=S.ui.q.toLowerCase();return S.tasks.filter(function(t){return (!S.ui.fp||t.projectId===S.ui.fp)&&(!S.ui.fa||(S.ui.fa==='_'?!t.assignee:t.assignee===S.ui.fa))&&(!S.ui.fs||t.status===S.ui.fs)&&(!S.ui.fpr||t.priority===S.ui.fpr)&&(!S.ui.fdf||t.due>=S.ui.fdf)&&(!S.ui.fdt||t.due<=S.ui.fdt)&&(!q||(t.title+' '+t.tags.join(' ')).toLowerCase().indexOf(q)>=0)})}
+function vTasks(){var u=S.ui;
+  return '<div class="tools"><div class="seg" role="group" aria-label="View">'+TVIEWS.map(function(v){return '<button data-act="tview" data-v="'+v[0]+'" aria-pressed="'+(u.tview===v[0])+'">'+v[1]+'</button>'}).join('')+'</div>'+
+   '<input type="search" id="q" data-in="q" placeholder="Search" value="'+esc(u.q)+'" style="width:150px">'+
+   '<select data-ch="fp" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),u.fp)+'</select>'+
+   '<select data-ch="fa" aria-label="Assignee">'+opt([['','Everyone'],['_','Unassigned']].concat(S.users.map(function(x){return [x.id,x.name]})),u.fa)+'</select>'+
+   '<select data-ch="fs" aria-label="Status">'+opt([['','All statuses']].concat(STATUSES),u.fs)+'</select>'+
+   '<select data-ch="fpr" aria-label="Priority">'+opt([['','All priorities']].concat(PRIOS),u.fpr)+'</select>'+
+   '<label class="who">Due from <input type="date" data-ch="fdf" value="'+esc(u.fdf)+'"></label><label class="who">to <input type="date" data-ch="fdt" value="'+esc(u.fdt)+'"></label>'+
+   (u.q||u.fp||u.fa||u.fs||u.fpr||u.fdf||u.fdt?'<button class="btn" data-act="clearf">Clear filters</button>':'')+
+   (u.tview==='list'?'<select data-ch="group" aria-label="Group by">'+opt([['none','No grouping'],['status','By status'],['project','By project'],['assignee','By person'],['priority','By priority']],u.group)+'</select>':'')+
+   '<button class="btn" data-act="xlsx" id="xl" title="Exports the tasks matching the filters above">Export Excel (<span id="xln">'+filtered().length+'</span>)</button>'+
+   (isPM()?'<button class="btn pri" data-act="newtask">+ Task</button>':'')+'</div><div id="tv">'+tv()+'</div>'}
+function tv(){switch(S.ui.tview){case 'board':return vBoard();case 'timeline':return vTL();case 'calendar':return vCal();case 'workload':return vWL();default:return vList()}}
+function vList(){var ts=filtered(),g=S.ui.group,cols=8+S.fields.length;
+  var key={status:function(t){return t.status},project:function(t){return (P(t.projectId)||{}).name||'—'},assignee:function(t){return uname(t.assignee)},priority:function(t){return t.priority}}[g];
+  var groups=[['',ts]];
+  if(key){var m={};ts.forEach(function(t){var k=key(t);(m[k]=m[k]||[]).push(t)});var ks=Object.keys(m);if(g==='status')ks.sort(function(a,b){return STATUSES.indexOf(a)-STATUSES.indexOf(b)});if(g==='priority')ks.sort(function(a,b){return PRIOS.indexOf(b)-PRIOS.indexOf(a)});groups=ks.map(function(k){return [k,m[k]]})}
+  var row=function(t){var p=P(t.projectId);return '<tr data-act="open" data-id="'+t.id+'"><td><b>'+esc(t.title)+'</b>'+flags(t)+(t.tags.length?' '+t.tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>'}).join(' '):'')+'</td><td>'+pdot(p)+esc(p?p.name:'—')+'</td><td>'+st(t.status)+'</td><td>'+esc(uname(t.assignee))+'</td><td>'+pr(t.priority)+'</td><td class="mono">'+fd(t.start)+'</td><td class="mono">'+fd(t.due)+'</td><td class="mono">'+nf(logged(t))+' / '+nf(t.est)+'</td>'+S.fields.map(function(f){return '<td class="mono">'+esc(cfv(t,f))+'</td>'}).join('')+'</tr>'};
+  return '<div class="tbw"><table class="tbl"><thead><tr><th>Title</th><th>Project</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Start</th><th>Due</th><th>Hrs log./est.</th>'+S.fields.map(function(f){return '<th>'+esc(f.name)+'</th>'}).join('')+'</tr></thead><tbody>'+
+   (ts.length?groups.map(function(gr){return (gr[0]?'<tr class="gh"><td colspan="'+cols+'">'+esc(gr[0])+' <span class="muted mono">'+gr[1].length+'</span></td></tr>':'')+gr[1].map(row).join('')}).join(''):'<tr><td colspan="'+cols+'" class="muted">No tasks match the filters.</td></tr>')+'</tbody></table></div>'}
+function vBoard(){var ts=filtered();
+  return '<div class="board">'+STATUSES.map(function(s){var c=ts.filter(function(t){return t.status===s});
+   return '<div class="col" data-drop="'+s+'"><h3>'+st(s)+'<span class="mono muted">'+c.length+'</span></h3>'+c.map(function(t){var p=P(t.projectId),tool=S.fields[0]&&t.cf[S.fields[0].id];
+    return '<button class="kc" draggable="true" data-drag="'+t.id+'" data-act="open" data-id="'+t.id+'"><span class="t">'+esc(t.title)+'</span><span class="m">'+pdot(p)+'<span>'+esc(ini(uname(t.assignee))||'—')+'</span><span class="mono">'+fd(t.due)+'</span>'+(tool?'<span class="tag">'+esc(tool)+'</span>':'')+flags(t)+'</span></button>'}).join('')+'</div>'}).join('')+'</div><p class="small muted">Drag cards between columns (mouse) or change the status from the task detail.</p>'}
+function vTL(){var ts=filtered().slice().sort(function(a,b){return a.projectId===b.projectId?(a.start<b.start?-1:1):(S.projects.indexOf(P(a.projectId))-S.projects.indexOf(P(b.projectId)))});
+  var CW=24,RH=30,HH=34,LW=210,t0=mondayOf(addD(TODAY(),-7));
+  if(ts.length){var mn=ts.map(function(t){return t.start}).sort()[0];if(mn<t0)t0=mondayOf(mn)}
+  var end=addD(TODAY(),70);ts.forEach(function(t){if(t.due>end)end=t.due});var days=Math.ceil((diffD(t0,end)+8)/7)*7,W=days*CW;
+  var rows=[],lastP=null;ts.forEach(function(t){if(t.projectId!==lastP){rows.push({ph:P(t.projectId)});lastP=t.projectId}rows.push({t:t})});
+  var idx={};rows.forEach(function(r,i){if(r.t)idx[r.t.id]=i});
+  var wk='';for(var i=0;i<days;i+=7)wk+='<span class="tl-wk" style="left:'+i*CW+'px">'+fd(addD(t0,i))+'</span>';
+  var html='<div class="tl"><div class="tl-in" style="--cw:'+CW+'px;width:'+(LW+W)+'px"><div class="tl-row hd"><div class="tl-lab">Task</div><div class="tl-cells" style="width:'+W+'px">'+wk+'</div></div>';
+  rows.forEach(function(r){
+    if(r.ph){html+='<div class="tl-row ph"><div class="tl-lab">'+pdot(r.ph)+esc(r.ph.name)+'</div><div class="tl-cells" style="width:'+W+'px"></div></div>';return}
+    var t=r.t,l=diffD(t0,t.start)*CW,w=(diffD(t.start,t.due)+1)*CW,pg=t.est?Math.min(100,100*logged(t)/t.est):(t.status==='Done'?100:0);
+    html+='<div class="tl-row"><div class="tl-lab" data-act="open" data-id="'+t.id+'" title="'+esc(t.title)+'">'+esc(t.title)+'</div><div class="tl-cells" style="width:'+W+'px"><button class="tl-bar" data-act="open" data-id="'+t.id+'" style="left:'+l+'px;width:'+w+'px;--c:var('+SCOL[t.status]+')" aria-label="'+esc(t.title)+'"><i style="width:'+pg+'%"></i><span>'+esc(ini(uname(t.assignee)))+'</span></button></div></div>'});
+  var tdx=diffD(t0,TODAY());
+  if(tdx>=0&&tdx<days)html+='<div class="tl-today" style="left:'+(LW+tdx*CW+CW/2)+'px;top:'+HH+'px"></div>';
+  var paths='';ts.forEach(function(t){t.deps.forEach(function(d){var p=T(d);if(p&&idx[p.id]!=null&&idx[t.id]!=null){
+    var x1=(diffD(t0,p.due)+1)*CW,y1=(idx[p.id])*RH+RH/2,x2=diffD(t0,t.start)*CW,y2=(idx[t.id])*RH+RH/2,xm=x1+6;
+    paths+='<path d="M'+x1+' '+y1+' H'+xm+' V'+y2+' H'+x2+'" fill="none" style="stroke:var(--muted)" stroke-width="1.2"/><path d="M'+x2+' '+y2+' l-5 -3.5 v7 z" style="fill:var(--muted)"/>'}})});
+  html+='<svg class="tl-svg" style="left:'+LW+'px;top:'+HH+'px" width="'+W+'" height="'+rows.length*RH+'">'+paths+'</svg></div></div><p class="small muted">Red line: today. Arrows link the end of the predecessor to the start of the successor; if you move a due date, successors shift in cascade.</p>';
+  return html}
+function vCal(){var ym=S.ui.cal.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),off=(first.getDay()+6)%7,gs=addD(iso(first),-off),ts=filtered(),h='';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(d){h+='<div class="dh">'+d+'</div>'});
+  for(var i=0;i<42;i++){var d=addD(gs,i),c=ts.filter(function(t){return t.due===d});
+    h+='<div class="dc'+(d.slice(0,7)!==S.ui.cal?' off':'')+(d===TODAY()?' td':'')+'"><span class="dn">'+Number(d.slice(8))+'</span>'+c.slice(0,3).map(function(t){return '<button class="cch" data-act="open" data-id="'+t.id+'" style="--c:var('+SCOL[t.status]+')">'+esc(t.title)+'</button>'}).join('')+(c.length>3?'<span class="small muted">+'+(c.length-3)+'</span>':'')+'</div>'}
+  return '<div class="tools"><button class="btn" data-act="calprev">←</button><b style="min-width:150px;text-align:center;text-transform:capitalize">'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><button class="btn" data-act="calnext">→</button><button class="btn" data-act="caltoday">Today</button></div><div class="cal">'+h+'</div><p class="small muted">Cards are placed on the due date.</p>'}
+function vWL(){var W=6,w=workload(W),hd='<div></div>';
+  for(var i=0;i<W;i++)hd+='<div class="c mono">'+fd(addD(w.mon,i*7))+'</div>';
+  var rows=S.users.map(function(u){return [u.name,u.cap,w.res[u.id]||Array(W).fill(0)]});if(w.res['']&&w.res[''].some(function(x){return x>0}))rows.push(['Unassigned',0,w.res['']]);
+  return '<div class="card" style="overflow-x:auto"><div class="wl">'+hd+rows.map(function(r){return '<div><b>'+esc(r[0])+'</b><div class="small muted">'+(r[1]?'cap. '+r[1]+' h/wk':'')+'</div></div>'+r[2].map(function(h){var q=r[1]?h/r[1]:0,cls=!r[1]?'':q>1?'b':q>.85?'w':'g';return '<div class="c"><div class="bar '+cls+'"><i style="height:'+Math.min(100,r[1]?100*q:Math.min(100,h*3))+'%"></i></div>'+nf(h)+(r[1]?' / '+r[1]:'')+' h</div>'}).join('')}).join('')+'</div></div><p class="small muted">Remaining hours (estimated minus logged) spread over the working days between start and due date. Past-due backlog counts on the current week.</p>'}
+
+/* ---------- requests (intake form) ---------- */
+function vReq(){var toolF=S.fields.find(function(f){return f.name==='Instrument'});
+  var q=S.tasks.filter(function(t){return t.src==='form'}).sort(function(a,b){return b.created-a.created});
+  return '<section class="card"><h2>New analysis request</h2><div class="form">'+
+   '<label class="full">Title<input id="rq-t" placeholder="E.g. DSC on 6 recycled PET samples"></label>'+
+   '<label>Requester<input id="rq-r" value="'+esc(me().name)+'"></label>'+
+   '<label>Analysis type<select id="rq-tool">'+opt(toolF&&toolF.options||TOOLS)+'</select></label>'+
+   '<label>No. of samples<input type="number" id="rq-n" min="1" value="1"></label>'+
+   '<label>Lot / material<input id="rq-l" placeholder="E.g. PET-R-02"></label>'+
+   '<label>Requested delivery<input type="date" id="rq-d" value="'+addD(TODAY(),7)+'"></label>'+
+   '<label>Urgency<select id="rq-p">'+opt(PRIOS,'Medium')+'</select></label>'+
+   '<label class="full">Notes<textarea id="rq-note" rows="2"></textarea></label>'+
+   '<label class="full"><button class="btn pri" data-act="reqsubmit" style="width:max-content">Submit request</button></label></div>'+
+   '<p class="small muted" style="margin:10px 0 0">The form writes to the "Internal requests" project with status "Triage". Data is local to this browser: receiving requests from external users requires a shared backend.</p></section>'+
+   '<section class="card"><h2>Triage queue</h2>'+(q.length?'<div class="tbw"><table class="tbl"><thead><tr><th>Request</th><th>Requester</th><th>Status</th><th>Delivery</th><th>Assign to</th><th></th></tr></thead><tbody>'+q.map(function(t){var tr=t.status==='Triage';
+    return '<tr><td><a href="#" data-act="open" data-id="'+t.id+'">'+esc(t.title)+'</a></td><td>'+esc(t.requester||'—')+'</td><td>'+st(t.status)+'</td><td class="mono">'+fd(t.due)+'</td><td>'+(tr&&isPM()?'<select id="ra-'+t.id+'">'+opt(uOpts(),'')+'</select>':esc(uname(t.assignee)))+'</td><td>'+(tr&&isPM()?'<button class="btn sm pri" data-act="reqaccept" data-id="'+t.id+'">Accept</button>':'')+'</td></tr>'}).join('')+'</tbody></table></div>':'<p class="muted">No requests.</p>')+'</section>'}
+
+/* ---------- documents ---------- */
+function vDocs(){var d=S.docs.find(function(x){return x.id===S.ui.doc})||S.docs[0],ro=!isPM()&&role()!=='Researcher';if(d)S.ui.doc=d.id;
+  var list='<div class="dl">'+S.docs.map(function(x){return '<button data-act="docsel" data-id="'+x.id+'" aria-current="'+(d&&d.id===x.id)+'">'+esc(x.title)+'</button>'}).join('')+(ro?'':'<button class="btn" data-act="docnew" style="margin-top:6px;text-align:center">+ New document</button>')+'</div>';
+  var ed=d?'<div class="card"><div class="form"><label class="full">Title<input data-ch="docf" data-f="title" value="'+esc(d.title)+'"'+(ro?' disabled':'')+'></label><label>Project<select data-ch="docf" data-f="projectId"'+(ro?' disabled':'')+'>'+opt([['','—']].concat(pOpts()),d.projectId||'')+'</select></label><label>Linked task<select data-ch="docf" data-f="taskId"'+(ro?' disabled':'')+'>'+opt([['','—']].concat(S.tasks.map(function(t){return [t.id,t.title]})),d.taskId||'')+'</select></label><label class="full">Text (# heading, - list, **bold**, `code`, http links)<textarea rows="9" data-ch="docf" data-f="body"'+(ro?' disabled':'')+'>'+esc(d.body)+'</textarea></label></div>'+
+    '<h2 style="margin-top:14px">Preview</h2><div class="md">'+md(d.body)+'</div>'+(ro?'':'<p><button class="btn dng sm" data-act="docdel" data-id="'+d.id+'">Delete document</button></p>')+'<p class="small muted">Updated '+new Date(d.updated).toLocaleString('en-GB')+'</p></div>':'<div class="card muted">No documents.</div>';
+  return '<div class="docs"><div class="card">'+list+'</div>'+ed+'</div>'}
+
+/* ---------- automations ---------- */
+function ruleText(r){var t=r.trigger,c=r.cond,a=r.action,pn=function(id){return (P(id)||{}).name||id};
+  var T1=t.type==='status_to'?'the status becomes "'+t.value+'"':t.type==='created'?'a task is created':'a task passes its due date';
+  var C1=c.type==='none'?'':c.type==='project'?' and the project is "'+pn(c.value)+'"':c.type==='priority'?' and the priority is "'+c.value+'"':' and it has the tag "'+c.value+'"';
+  var A1={set_assignee:'assign to '+uname(a.value),set_priority:'set priority "'+a.value+'"',set_status:'set status "'+a.value+'"',add_tag:'add tag "'+a.value+'"',create_task:'create task "'+a.value+'"',notify:'notify "'+a.value+'"'}[a.type];
+  return 'When '+T1+C1+' → '+A1}
+function valInput(type,val,id){
+  if(type==='status_to'||type==='set_status')return '<select id="'+id+'" data-ch="rb" data-f="'+id+'">'+opt(STATUSES,val)+'</select>';
+  if(type==='priority'||type==='set_priority')return '<select id="'+id+'" data-ch="rb" data-f="'+id+'">'+opt(PRIOS,val)+'</select>';
+  if(type==='project')return '<select id="'+id+'" data-ch="rb" data-f="'+id+'">'+opt(pOpts(),val)+'</select>';
+  if(type==='set_assignee')return '<select id="'+id+'" data-ch="rb" data-f="'+id+'">'+opt(uOpts(),val)+'</select>';
+  if(type==='created'||type==='overdue'||type==='none')return '';
+  return '<input id="'+id+'" data-ch="rb" data-f="'+id+'" value="'+esc(val)+'" placeholder="value">'}
+function vAuto(){var b=S.ui.rb,ed=isPM();
+  return '<section class="card"><h2>Active rules</h2><div class="lst">'+(S.rules.map(function(r){return '<div><label class="row"><input type="checkbox" data-ch="ruleon" data-id="'+r.id+'"'+(r.on?' checked':'')+(ed?'':' disabled')+'><span><b>'+esc(r.name)+'</b><br><span class="small muted">'+esc(ruleText(r))+'</span></span></label>'+(ed?'<button class="btn sm dng" data-act="ruledel" data-id="'+r.id+'">Remove</button>':'')+'</div>'}).join('')||'<p class="muted">No rules.</p>')+'</div></section>'+
+  (ed?'<section class="card"><h2>New rule</h2><div class="form">'+
+   '<label class="full">Name<input id="rb-name" data-ch="rb" data-f="name" value="'+esc(b.name)+'" placeholder="E.g. Samples delivered"></label>'+
+   '<label>When<select data-ch="rb" data-f="tt">'+opt([['status_to','the status becomes…'],['created','a task is created'],['overdue','a task is overdue']],b.tt)+'</select></label>'+
+   (b.tt==='status_to'?'<label>Status<span>'+valInput('status_to',b.tv,'tv')+'</span></label>':'')+
+   '<label>Condition<select data-ch="rb" data-f="ct">'+opt([['none','none'],['project','project is…'],['priority','priority is…'],['tag','has the tag…']],b.ct)+'</select></label>'+
+   (b.ct!=='none'?'<label>Value<span>'+valInput(b.ct==='tag'?'text':b.ct,b.cv,'cv')+'</span></label>':'')+
+   '<label>Action<select data-ch="rb" data-f="at">'+opt([['notify','notify'],['set_assignee','assign to'],['set_priority','set priority'],['set_status','set status'],['add_tag','add tag'],['create_task','create a task']],b.at)+'</select></label>'+
+   '<label>Value<span>'+valInput(b.at,b.av,'av')+'</span></label>'+
+   '<label class="full"><button class="btn pri" data-act="ruleadd" style="width:max-content">Add rule</button></label></div><p class="small muted" style="margin:10px 0 0">Rules apply on every change. Overdue rules are evaluated on load and every minute. Maximum chain depth: 3.</p></section>':'')}
+
+/* ---------- templates ---------- */
+var TPL=[
+ {id:'dsc',name:'DSC characterization',desc:'ASTM D3418 / ISO 11357-3: from sample preparation to report.',tasks:[
+  {t:'Sample preparation and weighing',d:1,est:3},{t:'DSC calibration check (In/Zn)',d:1,est:2,tool:'DSC'},
+  {t:'DSC run: 1st heating, cooling, 2nd heating',d:2,est:8,tool:'DSC',after:[0,1]},
+  {t:'Data processing: Tm, Tc, ΔHm and crystallinity',d:1,est:3,after:[2]},{t:'Report and data archiving',d:1,est:2,after:[3]}]},
+ {id:'ext',name:'Compound extrusion campaign',desc:'Drying, twin-screw setup, run, sampling and basic characterization.',tasks:[
+  {t:'Raw material drying',d:1,est:4},{t:'Thermal profile and feeding setup',d:1,est:6,tool:'Extruder',after:[0]},
+  {t:'Extrusion run and sampling',d:2,est:14,tool:'Extruder',after:[1]},{t:'MFR (ISO 1133-1)',d:1,est:4,tool:'MFR',after:[2]},
+  {t:'DSC on pellets',d:2,est:6,tool:'DSC',after:[2]},{t:'Campaign report',d:2,est:8,after:[3,4]}]},
+ {id:'film',name:'PE/EVOH/PE multilayer film',desc:'Coextrusion, conditioning, O₂ barrier and mechanical properties.',tasks:[
+  {t:'Structure and thickness definition',d:1,est:4},{t:'Film coextrusion',d:2,est:16,tool:'Extruder',after:[0]},
+  {t:'Specimen conditioning',d:2,est:1,after:[1]},{t:'OTR (ASTM D3985)',d:3,est:8,tool:'OTR',after:[2]},
+  {t:'Tensile test (ISO 527-3)',d:2,est:6,tool:'Tensile tester',after:[2]},{t:'Barrier and mechanical report',d:2,est:8,after:[3,4]}]},
+ {id:'cal',name:'Instrument calibration and verification',desc:'Planning, execution, deviation assessment and report.',tasks:[
+  {t:'Planning and reference materials',d:1,est:2},{t:'Calibration execution',d:1,est:4,after:[0]},
+  {t:'Deviation assessment',d:1,est:2,after:[1]},{t:'Calibration report and sign-off',d:1,est:2,after:[2]}]},
+ {id:'val',name:'Analytical method validation',desc:'Plan, repeatability, reproducibility, uncertainty and report.',tasks:[
+  {t:'Validation plan',d:2,est:6},{t:'Repeatability tests',d:3,est:12,after:[0]},{t:'Reproducibility tests (second operator)',d:3,est:12,after:[1]},
+  {t:'Uncertainty estimation',d:2,est:6,after:[2]},{t:'Validation report',d:2,est:8,after:[3]}]}];
+function vTpl(){var sel=S.ui.tpl;
+  return '<div class="wgrid">'+TPL.map(function(t){return '<section class="card"><h2>'+esc(t.name)+'</h2><p class="muted">'+esc(t.desc)+'</p><ol class="small">'+t.tasks.map(function(x){return '<li>'+esc(x.t)+' <span class="mono muted">'+x.d+' d'+(x.after?' · after '+x.after.map(function(k){return k+1}).join(','):'')+'</span></li>'}).join('')+'</ol>'+
+   (isPM()?(sel===t.id?'<div class="form"><label>Project name<input id="tp-n" value="'+esc(t.name)+' ('+new Date().toLocaleDateString('en-GB')+')"></label><label>Start<input type="date" id="tp-d" value="'+normWD(TODAY())+'"></label><label class="full"><span class="row"><button class="btn pri" data-act="tplcreate" data-id="'+t.id+'">Create project</button><button class="btn" data-act="tplsel" data-id="">Cancel</button></span></label></div>':'<button class="btn" data-act="tplsel" data-id="'+t.id+'">Use template</button>'):'')+'</section>'}).join('')+'</div>'+
+  (isPM()?'<section class="card"><h2>Create tasks from a list</h2><div class="form"><label>Project<select id="bk-p">'+opt(pOpts(),S.ui.fp||(S.projects[0]&&S.projects[0].id))+'</select></label><label class="full">One task per line. Options: <span class="mono">@surname</span> assigns, <span class="mono">#3</span> duration in days, <span class="mono">~6h</span> estimated hours<textarea id="bk-t" rows="5" placeholder="Weigh samples @Bianchi #1 ~3h&#10;FTIR on 8 films @Neri #2 ~6h"></textarea></label><label class="full"><button class="btn pri" data-act="bulk" style="width:max-content">Create tasks</button></label></div></section>':'')}
+
+/* ---------- settings ---------- */
+function vSet(){var ad=isAdmin(),json='';
+  var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?'<button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
+  var fields=S.fields.map(function(f){return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="small mono">'+esc(f.type==='select'?(f.options||[]).join(', '):f.type==='formula'?f.formula:'')+'</td><td>'+(isPM()?'<button class="btn sm dng" data-act="fielddel" data-id="'+f.id+'">Remove</button>':'')+'</td></tr>'}).join('');
+  var ints=[['Slack','https://slack.com'],['Google Calendar','https://calendar.google.com'],['Microsoft 365','https://www.microsoft.com/microsoft-365'],['Jira','https://www.atlassian.com/software/jira'],['GitHub','https://github.com'],['Benchling (ELN)','https://www.benchling.com'],['SciNote (ELN)','https://www.scinote.net']];
+  return '<section class="card"><h2>Users and roles</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Role</th><th>Capacity h/wk</th><th></th></tr></thead><tbody>'+users+'</tbody></table></div>'+
+   (ad?'<div class="tools" style="margin-top:10px"><input id="nu-n" placeholder="Name"><select id="nu-r">'+opt(ROLES,'Researcher')+'</select><button class="btn pri" data-act="useradd">Add</button></div>':'')+
+   '<ul class="small muted"><li>Admin: everything, including people and roles.</li><li>Project manager: projects, tasks, rules, templates, assignments.</li><li>Researcher: edits and logs hours on own tasks.</li><li>Viewer: read-only.</li></ul><p class="small muted">Access control is simulated in the UI (switch user at the top): without a server it is not a security measure.</p></section>'+
+   '<section class="card"><h2>Custom fields</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Type</th><th>Options / formula</th><th></th></tr></thead><tbody>'+fields+'</tbody></table></div>'+
+   (isPM()?'<div class="form" style="margin-top:10px"><label>Name<input id="nf-n"></label><label>Type<select id="nf-t">'+opt(['text','number','select','date','checkbox','formula'],'text')+'</select></label><label class="full">Options (comma-separated) or formula, e.g. <span class="mono">{est}/{No. of samples}</span>. Variables: est, logged, numeric fields.<input id="nf-x"></label><label class="full"><button class="btn pri" data-act="fieldadd" style="width:max-content">Add field</button></label></div>':'')+'</section>'+
+   '<section class="card"><h2>Integrations and backup</h2><p class="muted">No automatic integration is active: a backend would be required. Calendar export (ICS) and JSON backup are available now. Useful links:</p><p>'+ints.map(function(i){return '<a href="'+i[1]+'" target="_blank" rel="noopener">'+esc(i[0])+'</a>'}).join(' · ')+'</p>'+
+   '<div class="tools"><button class="btn" data-act="copyics">Copy ICS calendar</button><button class="btn" data-act="copyjson">Copy JSON backup</button><button class="btn" data-act="impjson"'+(isAdmin()?'':' disabled')+'>Import from field</button><button class="btn dng" data-act="reset"'+(isAdmin()?'':' disabled')+'>'+(S.ui.confirmReset?'Confirm: restore sample data':'Restore sample data')+'</button></div><textarea id="jb" rows="4" placeholder="Paste a JSON backup here to import it" style="margin-top:10px"></textarea></section>'+
+   '<section class="card"><h2>Activity log</h2><div class="lst small">'+(S.activity.slice(0,40).map(function(a){return '<div style="display:block"><span class="mono muted">'+new Date(a.t).toLocaleString('en-GB')+'</span> · '+esc(uname(a.u))+': '+esc(a.m)+'</div>'}).join('')||'<span class="muted">No activity recorded.</span>')+'</div></section>'}
+
+/* ---------- info and license ---------- */
+function vInfo(){
+  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>1.3</dd><dt>License</dt><dd>PolyForm Noncommercial 1.0.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
+   '<dt>Purpose</dt><dd>Project, task, resource and request management in a chemical/polymer laboratory, with the typical features of Asana and monday.com.</dd>'+
+   '<dt>Method</dt><dd>Single-file HTML with vanilla JavaScript; data in browser localStorage; finish-to-start date cascade on working days; workload = remaining hours spread over working days; sessions saved as browser snapshots or JSON files.</dd>'+
+   '<dt>Disclaimer</dt><dd>validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.</dd>'+
+   '<dt>Third-party components</dt><dd>IBM Plex Sans, IBM Plex Mono, Bricolage Grotesque (Google Fonts, SIL OFL 1.1) · <a href="https://fonts.google.com" target="_blank" rel="noopener">fonts.google.com</a></dd>'+
+   '<dt>Scientific references</dt><dd>ASTM D3418, ISO 11357-3, ISO 1133-1, ISO 527-3, ASTM D3985 (cited in the templates) · <a href="https://www.iso.org" target="_blank" rel="noopener">iso.org</a> · <a href="https://www.astm.org" target="_blank" rel="noopener">astm.org</a></dd>'+
+   '<dt>Product references</dt><dd><a href="https://asana.com" target="_blank" rel="noopener">asana.com</a> · <a href="https://monday.com" target="_blank" rel="noopener">monday.com</a> · for structured experimental data: <a href="https://www.benchling.com" target="_blank" rel="noopener">Benchling</a>, <a href="https://www.scinote.net" target="_blank" rel="noopener">SciNote</a> (LabPM does not replace an ELN)</dd></dl>'+
+   '<p><b>AI disclosure:</b> this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).</p></section>'+
+   '<section class="card"><details class="lic"><summary>License text</summary><pre>POLYFORM NONCOMMERCIAL LICENSE 1.0.0\n\nCopyright (c) 2026 Flavio Pendolino\nAll rights reserved.\nCommercial use requires a separate license: penfla@me.com\n\n--- ACCEPTANCE ---\nIn order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.\n\n--- COPYRIGHT LICENSE ---\nThe licensor grants you a copyright license for the software to do everything you might do with the software that is not commercial use or a use closely related to commercial use, for any term of years.\n\n--- NONCOMMERCIAL PURPOSES ---\nNoncommercial purposes include personal use, educational use, and research use. Noncommercial purposes do not include any purpose primarily intended for or directed toward commercial advantage or monetary compensation, or any use by any legal entity primarily engaged in the business of providing goods or services of the kind provided by the software or a closely related kind.\n\n--- COVENANTS (Copyleft) ---\nYou may not allow any third party to benefit from the grants of this license without enforcing all terms of this license as conditions for those grants.\n\n--- NOTICES ---\nEnsure all copies of the software include all copyright, patent, trademark, and attribution notices from the source you received them.\n\n--- COMMERCIALIZATION ---\nYou may not commercialize the software, meaning you may not grant licenses to use the software or distribute the software for a fee, nor may you otherwise seek monetary compensation in connection with the software.\n\n--- NO LIABILITY ---\nAs far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.\n\nFull license text: https://polyformproject.org/licenses/noncommercial/1.0.0/</pre></details></section>'}
+
+/* ---------- session ---------- */
+function vSession(){
+  var snaps=getSnaps(),ad=isAdmin(),cs=S.ui.confirmSnap;
+  var fmt=function(ts){return new Date(ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})};
+  var rows=snaps.map(function(s){var d=s.data||{};
+    return '<tr><td><b>'+esc(s.name)+'</b>'+(s.auto?' <span class="tag">automatic</span>':'')+'</td><td class="mono small">'+fmt(s.ts)+'</td><td class="mono small">'+(Array.isArray(d.projects)?d.projects.length:0)+' projects · '+(Array.isArray(d.tasks)?d.tasks.length:0)+' tasks</td><td><div class="row" style="justify-content:flex-end"><button class="btn sm'+(cs===s.id?' pri':'')+'" data-act="snaprestore" data-id="'+esc(s.id)+'"'+(ad?'':' disabled')+'>'+(cs===s.id?'Confirm restore':'Restore')+'</button><button class="btn sm dng" data-act="snapdel" data-id="'+esc(s.id)+'">'+(cs==='d:'+s.id?'Confirm':'Delete')+'</button></div></td></tr>'}).join('');
+  return '<div class="sgrid">'+
+   '<section class="card"><h2>Autosave</h2><p style="margin:0 0 8px">'+esc(savedText())+'</p><p class="small muted" style="margin:0">Every change is written to this browser’s storage. It is not shared with other devices or people and the browser may clear it: for a reliable backup, save to a file.</p></section>'+
+   '<section class="card"><h2>Save the session</h2><div class="form"><label class="full">Name<input id="ss-name" placeholder="E.g. Campaign 03, end of week" maxlength="80"></label>'+
+   '<label class="full"><span class="row" style="flex-wrap:wrap"><button class="btn pri" data-act="snapsave">Save in browser</button><button class="btn" data-act="savefile">Save to file (.json)</button></span></label></div>'+
+   '<p class="small muted" style="margin:10px 0 0">The session includes projects, tasks, hours, documents, rules, fields, people and settings. Up to '+MAXSNAP+' sessions in the browser; the file is for moving your work to another computer.</p></section></div>'+
+   vFolder()+vEmpty()+
+   '<section class="card"><h2>Sessions saved in the browser</h2>'+(rows?'<div class="tbw"><table class="tbl" style="min-width:600px"><thead><tr><th>Name</th><th>Saved</th><th>Content</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p class="muted">No saved sessions. Use "Save in browser" to create one.</p>')+
+   '<p class="small muted" style="margin:10px 0 0">Restoring replaces the current data (Admin only) and first creates an automatic copy. Running timers are not restored.</p></section>'+
+   '<section class="card"><h2>Open from file</h2><div class="form"><label class="full">Session file (.json)<input type="file" id="sf" accept=".json,application/json" data-ch="openfile"'+(ad?'':' disabled')+'></label></div>'+
+   '<p class="small muted" style="margin:10px 0 0">'+(ad?'Open a previously saved file. Current data is replaced after an automatic copy.':'Only the Admin role can open a session from file.')+'</p>'+
+   '<details class="lic" style="margin-top:10px"><summary>Alternative: copy and paste the JSON</summary><div class="tools" style="margin:8px 0"><button class="btn" data-act="copyjson">Copy session</button><button class="btn" data-act="impjson"'+(ad?'':' disabled')+'>Import from field</button></div><textarea id="jb" rows="4" placeholder="Paste a session JSON here"></textarea></details></section>'}
+
+/* ---------- task detail ---------- */
+function renderDrawer(){
+  var el=$('#drawer'),t=S.ui.drawer&&T(S.ui.drawer);
+  if(!t){el.innerHTML='';return}
+  var old=$('#drpanel'),sc=old?old.scrollTop:0,ro=!canEdit(t),dis=ro?' disabled':'',p=P(t.projectId);
+  var cands=S.tasks.filter(function(x){return x.id!==t.id&&!dependsOn(x.id,t.id)});
+  var succ=S.tasks.filter(function(x){return x.deps.indexOf(t.id)>=0});
+  var docs=S.docs.filter(function(d){return d.taskId===t.id});
+  var cf=S.fields.map(function(f){var v=t.cf[f.id],n='cf:'+f.id,lab='<label>'+esc(f.name);
+    if(f.type==='formula')return lab+'<input value="'+esc(cfv(t,f))+'" disabled></label>';
+    if(f.type==='select')return lab+'<select data-ch="dr" data-f="'+n+'"'+dis+'>'+opt([['','—']].concat(f.options||[]),v||'')+'</select></label>';
+    if(f.type==='checkbox')return lab+'<input type="checkbox" data-ch="dr" data-f="'+n+'"'+(v?' checked':'')+dis+'></label>';
+    return lab+'<input type="'+(f.type==='number'?'number':f.type==='date'?'date':'text')+'" data-ch="dr" data-f="'+n+'" value="'+esc(v==null?'':v)+'"'+dis+'></label>'}).join('');
+  var running=t.timer;
+  el.innerHTML='<div class="ov" data-act="closeov"><div class="dr" id="drpanel" role="dialog" aria-label="Task detail"><div class="row"><h2 class="grow">'+pdot(p)+esc(t.title)+'</h2><button class="btn sm" data-act="close">Close</button></div>'+
+   '<div class="row small">'+st(t.status)+flags(t)+(ro?'<span class="muted">read-only for your role</span>':'')+'</div>'+
+   '<div class="form"><label class="full">Title<input data-ch="dr" data-f="title" value="'+esc(t.title)+'"'+dis+'></label>'+
+   '<label>Project<select data-ch="dr" data-f="project"'+dis+'>'+opt(pOpts(),t.projectId)+'</select></label>'+
+   '<label>Status<select data-ch="dr" data-f="status"'+dis+'>'+opt(STATUSES,t.status)+'</select></label>'+
+   '<label>Assignee<select data-ch="dr" data-f="assignee"'+(isPM()?'':' disabled')+'>'+opt(uOpts(),t.assignee||'')+'</select></label>'+
+   '<label>Priority<select data-ch="dr" data-f="priority"'+dis+'>'+opt(PRIOS,t.priority)+'</select></label>'+
+   '<label>Start<input type="date" data-ch="dr" data-f="start" value="'+t.start+'"'+dis+'></label>'+
+   '<label>Due<input type="date" data-ch="dr" data-f="due" value="'+t.due+'"'+dis+'></label>'+
+   '<label>Estimated hours<input type="number" min="0" step="0.5" data-ch="dr" data-f="est" value="'+t.est+'"'+dis+'></label>'+
+   '<label>Tags (comma-separated)<input data-ch="dr" data-f="tags" value="'+esc(t.tags.join(', '))+'"'+dis+'></label></div>'+
+   (cf?'<div class="sec"><h3>Custom fields</h3><div class="form">'+cf+'</div></div>':'')+
+   '<div class="sec"><h3>Dependencies (finish-to-start)</h3><div class="chk">'+(cands.map(function(x){return '<label><input type="checkbox" data-ch="dr" data-f="dep:'+x.id+'"'+(t.deps.indexOf(x.id)>=0?' checked':'')+dis+'><span>'+esc(x.title)+' <span class="muted small">'+esc((P(x.projectId)||{}).name||'')+'</span></span></label>'}).join('')||'<span class="muted">No other tasks.</span>')+'</div>'+
+   (isBlocked(t)?'<div class="small"><span class="flag warn">blocked by</span> '+blockers(t).map(function(b){return esc(b.title)}).join('; ')+'</div>':'')+
+   (succ.length?'<div class="small muted">Unblocks: '+succ.map(function(x){return esc(x.title)}).join('; ')+'. If you move the due date, these tasks shift in cascade.</div>':'')+'</div>'+
+   '<div class="sec"><h3>Time</h3><div class="row"><span class="mono">'+nf(logged(t),2)+' h logged / '+nf(t.est)+' h estimated</span>'+(ro?'':(running?'<button class="btn dng sm" data-act="timerstop" data-id="'+t.id+'">Stop timer ('+esc(uname(running.user))+')</button>':'<button class="btn sm" data-act="timerstart" data-id="'+t.id+'">Start timer</button>'))+'</div>'+
+   (ro?'':'<div class="row"><input type="number" id="lg-h" min="0" step="0.25" placeholder="hours" style="width:80px"><input id="lg-n" placeholder="note" class="grow"><button class="btn sm" data-act="addlog" data-id="'+t.id+'">Add</button></div>')+
+   '<div class="lst small">'+t.log.slice(-8).reverse().map(function(l){return '<div><span><span class="mono">'+fd(l.date)+'</span> · '+esc(uname(l.u))+' · <b class="mono">'+nf(l.h,2)+' h</b> '+esc(l.note||'')+'</span>'+(ro?'':'<button class="btn sm" data-act="dellog" data-id="'+t.id+'" data-lid="'+l.id+'">×</button>')+'</div>'}).join('')+'</div></div>'+
+   '<div class="sec"><h3>Notes</h3><textarea rows="3" data-ch="dr" data-f="notes"'+dis+'>'+esc(t.notes)+'</textarea></div>'+
+   attSec(t,ro)+
+   '<div class="sec"><h3>Documents</h3>'+(docs.map(function(d){return '<div><a href="#" data-act="docsel" data-id="'+d.id+'" data-go="1">'+esc(d.title)+'</a></div>'}).join('')||'<span class="muted small">No linked documents.</span>')+(isPM()||role()==='Researcher'?'<button class="btn sm" data-act="docnew" data-task="'+t.id+'" style="width:max-content">New document for this task</button>':'')+'</div>'+
+   (isPM()?'<div class="sec"><button class="btn dng" data-act="'+(S.ui.confirmDel===t.id?'deltask2':'deltask')+'" data-id="'+t.id+'" style="width:max-content">'+(S.ui.confirmDel===t.id?'Confirm deletion':'Delete task')+'</button></div>':'')+
+   '</div></div>';
+  var np=$('#drpanel');if(np)np.scrollTop=sc}
+
+
+/* ---------- Excel export (OOXML written in-page, store-only ZIP) ---------- */
+var CRCT=(function(){var t=[],c,n,k;for(n=0;n<256;n++){c=n;for(k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=CRCT[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipStore(files){var enc=new TextEncoder(),parts=[],cd=[],off=0;
+  files.forEach(function(f){var nm=enc.encode(f[0]),d=enc.encode(f[1]),crc=crc32(d);
+    var lh=new DataView(new ArrayBuffer(30));lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(12,0x21,true);lh.setUint32(14,crc,true);lh.setUint32(18,d.length,true);lh.setUint32(22,d.length,true);lh.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(lh.buffer),nm,d);
+    var ch=new DataView(new ArrayBuffer(46));ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(14,0x21,true);ch.setUint32(16,crc,true);ch.setUint32(20,d.length,true);ch.setUint32(24,d.length,true);ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cd.push(new Uint8Array(ch.buffer),nm);off+=30+nm.length+d.length});
+  var cs=0;cd.forEach(function(x){cs+=x.length});
+  var e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob(parts.concat(cd,[new Uint8Array(e.buffer)]),{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+var xe=function(x){return String(x==null?'':x).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var colN=function(i){var s='';i++;while(i>0){var m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+var xSerial=function(d){var a=d.split('-').map(Number);return Math.round((Date.UTC(a[0],a[1]-1,a[2])-Date.UTC(1899,11,30))/864e5)};
+/* cell: string -> text; {n:number} -> number; {d:'YYYY-MM-DD'} -> date; null -> empty */
+function xCell(c,r,i,hd){var ref=colN(i)+r;if(c==null||c==='')return '';
+  if(hd)return '<c r="'+ref+'" s="1" t="inlineStr"><is><t>'+xe(c)+'</t></is></c>';
+  if(typeof c==='object'&&c.n!=null)return isFinite(c.n)?'<c r="'+ref+'" s="3"><v>'+c.n+'</v></c>':'';
+  if(typeof c==='object'&&c.d)return '<c r="'+ref+'" s="2"><v>'+xSerial(c.d)+'</v></c>';
+  return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xe(c)+'</t></is></c>'}
+function xSheet(rows,widths,filter){var out='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">'+(filter?'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>':'')+'</sheetView></sheetViews><cols>'+widths.map(function(w,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>'}).join('')+'</cols><sheetData>';
+  rows.forEach(function(r,ri){out+='<row r="'+(ri+1)+'">'+r.map(function(c,i){return xCell(c,ri+1,i,filter&&ri===0)}).join('')+'</row>'});
+  out+='</sheetData>'+(filter&&rows.length?'<autoFilter ref="A1:'+colN(rows[0].length-1)+rows.length+'"/>':'')+'</worksheet>';return out}
+function buildXlsx(tasks,info){
+  var cfs=S.fields,hd=['Title','Project','Status','Assignee','Priority','Start','Due','Estimated h','Logged h','Overdue','Blocked','Depends on','Tags'].concat(cfs.map(function(f){return f.name}),['Requester','Notes','Attachments']);
+  var rows=[hd];
+  tasks.forEach(function(t){var p=P(t.projectId);
+    var cv=cfs.map(function(f){if(f.type==='formula'){var r=calc(t,f);return r==null?null:{n:r}}var v=t.cf[f.id];if(v==null||v==='')return null;if(f.type==='number')return isFinite(parseFloat(v))?{n:parseFloat(v)}:String(v);if(f.type==='date')return DT.test(String(v))?{d:v}:String(v);if(f.type==='checkbox')return v?'Yes':'No';return String(v)});
+    rows.push([t.title,p?p.name:'',t.status,t.assignee?uname(t.assignee):'',t.priority,{d:t.start},{d:t.due},{n:t.est},{n:Math.round(logged(t)*100)/100},isOver(t)?'Yes':'No',isBlocked(t)&&t.status!=='Done'?'Yes':'No',t.deps.map(function(d){var x=T(d);return x?x.title:''}).filter(Boolean).join('; '),t.tags.join(', ')].concat(cv,[t.requester||'',t.notes||'',S.files.filter(function(f){return f.taskId===t.id}).map(function(f){return f.name}).join('; ')]))});
+  var w=[38,30,13,14,10,12,12,12,10,9,9,34,18].concat(cfs.map(function(){return 16}),[16,40,36]);
+  var ws1=xSheet(rows,w,true),ws2=xSheet(info,[26,60],false),X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  var ns='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  return zipStore([
+   ['[Content_Types].xml',X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+   ['_rels/.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+   ['xl/workbook.xml',X+'<workbook '+ns+'><sheets><sheet name="Tasks" sheetId="1" r:id="rId1"/><sheet name="Export info" sheetId="2" r:id="rId2"/></sheets></workbook>'],
+   ['xl/_rels/workbook.xml.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+   ['xl/styles.xml',X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy\\-mm\\-dd"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD6ECEF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
+   ['xl/worksheets/sheet1.xml',ws1],['xl/worksheets/sheet2.xml',ws2]])}
+/* save a Blob: native "Save as" dialog (starts in the backup folder if connected) or plain download */
+function saveBlob(blob,fn,desc,ext,mime){
+  if(typeof window.showSaveFilePicker==='function'){var o={suggestedName:fn,types:[{description:desc,accept:{[mime]:[ext]}}]};if(FS.h)o.startIn=FS.h;
+    return window.showSaveFilePicker(o).then(function(h){return h.createWritable().then(function(w){return w.write(blob).then(function(){return w.close()})})}).then(function(){return true},function(er){if(er&&er.name==='AbortError')return false;return dl(blob,fn)})}
+  return Promise.resolve(dl(blob,fn))}
+function dl(blob,fn){var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url)},1000);return true}
+function exportTasks(){var ts=filtered().slice().sort(function(a,b){var pa=S.projects.indexOf(P(a.projectId)),pb=S.projects.indexOf(P(b.projectId));return pa!==pb?pa-pb:(a.start<b.start?-1:a.start>b.start?1:0)}),u=S.ui;
+  if(!ts.length){toast('No tasks match the filters: nothing to export.');return}
+  var pn=u.fp?(P(u.fp)||{}).name:'All',an=u.fa==='_'?'Unassigned':u.fa?uname(u.fa):'Everyone';
+  var info=[['Application','LabPM v1.3'],['Exported at',new Date().toLocaleString('en-GB')],['Exported by',me().name+' ('+me().role+')'],['Rows',{n:ts.length}],['',''],['Filter','Value'],['Search',u.q||'(none)'],['Project',pn],['Assignee',an],['Status',u.fs||'All'],['Priority',u.fpr||'All'],['Due from',u.fdf||'(none)'],['Due to',u.fdt||'(none)']];
+  var fn='labpm-tasks-'+TODAY()+'.xlsx';
+  saveBlob(buildXlsx(ts,info),fn,'Excel workbook','.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').then(function(ok){if(ok){log('Exported '+ts.length+' tasks to Excel');save();toast('Exported '+ts.length+' tasks to '+fn)}})}
+
+/* ---------- backup folder (File System Access API, Chromium) ---------- */
+var FSOK=typeof window.showDirectoryPicker==='function';
+var FS={h:null,pending:null,on:false,err:'',last:0,timer:null,q:Promise.resolve()};
+function idbDo(mode,fn){return new Promise(function(res,rej){var r=indexedDB.open('labpm_fs',1);r.onupgradeneeded=function(){r.result.createObjectStore('h')};r.onerror=function(){rej(r.error)};r.onsuccess=function(){try{var tx=r.result.transaction('h',mode),q=fn(tx.objectStore('h'));tx.oncomplete=function(){res(q&&q.result)};tx.onerror=function(){rej(tx.error)}}catch(e){rej(e)}}})}
+var stamp=function(){var d=new Date();return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())};
+function fsWrite(h,name,txt){return h.getFileHandle(name,{create:true}).then(function(fh){return fh.createWritable()}).then(function(w){return w.write(txt).then(function(){return w.close()})})}
+function folderInit(){if(!FSOK)return;
+  idbDo('readonly',function(st){return st.get('dir')}).then(function(h){if(!h)return;
+    var on=true;try{on=localStorage.getItem('labpm_fs_on')!=='0'}catch(e){}
+    return h.queryPermission({mode:'readwrite'}).then(function(p){if(p==='granted'){FS.h=h;FS.on=on;folderNow(false)}else{FS.pending=h}})}).catch(function(){}).then(function(){if(S.ui.view==='session')renderBody()})}
+function folderSchedule(){if(!FS.h||!FS.on)return;clearTimeout(FS.timer);FS.timer=setTimeout(function(){folderNow(false)},800)}
+function folderNow(copy){if(!FS.h)return Promise.resolve();var h=FS.h,txt=JSON.stringify(snapData(),null,1);
+  FS.q=FS.q.then(function(){return fsWrite(h,'labpm-autosave.json',txt)}).then(function(){if(copy)return fsWrite(h,'labpm-copy-'+stamp()+'.json',txt)}).then(function(){FS.err='';FS.last=Date.now()},function(er){FS.err=(er&&er.message)||'write failed';FS.on=false}).then(function(){var el=document.getElementById('sv');if(el)el.textContent=savedText();if(S.ui.view==='session')renderBody();if(FS.err)toast('Folder autosave stopped: '+FS.err)});
+  return FS.q}
+function folderConnect(h){FS.h=h;FS.pending=null;FS.on=true;FS.err='';try{localStorage.setItem('labpm_fs_on','1')}catch(e){}
+  idbDo('readwrite',function(st){return st.put(h,'dir')}).catch(function(){});
+  /* snapshot of the database as it is BEFORE any further editing, then continuous autosave */
+  var txt=JSON.stringify(snapData(),null,1);
+  return fsWrite(h,'labpm-initial-'+stamp()+'.json',txt).then(function(){return folderNow(false)}).then(function(){log('Backup folder connected: '+h.name);save();toast('Initial copy saved in "'+h.name+'". Autosave is on.')},function(er){FS.err=(er&&er.message)||'write failed';FS.on=false;toast('Cannot write to folder: '+FS.err)}).then(function(){renderBody()})}
+function vFolder(){var h='<section class="card"><h2>Backup folder (autosave every change)</h2>';
+  if(!FSOK)return h+'<p class="muted" style="margin:0">Folder access is not available in this browser (it needs a Chromium-based browser such as Chrome or Edge). Use <b>Save to file</b> above to keep a backup.</p></section>';
+  var st,btn='';
+  if(FS.h){st=FS.err?'<span class="flag bad">error</span> '+esc(FS.err):FS.on?'<span class="flag good">on</span> Writing <span class="mono">labpm-autosave.json</span> in <b>'+esc(FS.h.name)+'</b> after every change'+(FS.last?' (last write '+hhmm(FS.last)+')':'')+'.':'<span class="flag warn">paused</span> Folder <b>'+esc(FS.h.name)+'</b> is connected but autosave is paused.';
+    btn='<button class="btn pri" data-act="foldernow">Save timestamped copy now</button><button class="btn" data-act="foldertoggle">'+(FS.on?'Pause autosave':'Resume autosave')+'</button><button class="btn" data-act="foldersel">Change folder…</button><button class="btn dng" data-act="foldernone">Disconnect</button>'}
+  else if(FS.pending){st='Folder <b>'+esc(FS.pending.name)+'</b> was used before. The browser needs your permission again.';btn='<button class="btn pri" data-act="folderre">Reconnect folder</button><button class="btn" data-act="foldersel">Choose another folder…</button>'}
+  else{st='Not connected. Choose a folder <b>before you start entering data</b>: an initial copy of the current database is written there, then every change is saved automatically.';btn='<button class="btn pri" data-act="foldersel">Choose folder…</button>'}
+  return h+'<p style="margin:0 0 10px">'+st+'</p><div class="tools">'+btn+'</div><p class="small muted" style="margin:10px 0 0">Files: <span class="mono">labpm-initial-&lt;date&gt;.json</span> (copy at connection), <span class="mono">labpm-autosave.json</span> (always the latest state), <span class="mono">labpm-copy-&lt;date&gt;.json</span> (manual copies). They are plain, unencrypted JSON: choose a folder with appropriate access control. Reopen any of them with <i>Open from file</i>. The browser asks permission again after a restart.</p></section>'}
+
+
+/* ---------- attachments (copied into <backup folder>/attachments/...) ---------- */
+var fsz=function(n){return n<1024?n+' B':n<1048576?nf(n/1024,1)+' KB':nf(n/1048576,1)+' MB'};
+var safeName=function(n){n=String(n||'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').replace(/^[.\s]+|[.\s]+$/g,'');return (n||'file').slice(0,120)};
+var slug=function(n){return String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'x'};
+function attDir(taskId,projectId){var t=taskId&&T(taskId),p=P(projectId||(t&&t.projectId));
+  return t?'task-'+slug(t.title)+'-'+t.id:'project-'+slug(p&&p.name)+'-'+(p?p.id:'none')}
+var canAttach=function(taskId){var t=taskId&&T(taskId);return t?canEdit(t):isPM()};
+function attPerm(){if(!FS.h)return Promise.reject(new Error(FS.pending?'Reconnect the backup folder first (Session page).':'Connect a backup folder first (Session page): attachments are stored next to the database.'));
+  return FS.h.queryPermission({mode:'readwrite'}).then(function(p){return p==='granted'?p:FS.h.requestPermission({mode:'readwrite'})}).then(function(p){if(p!=='granted')throw new Error('Folder permission not granted.')})}
+async function attachFiles(list,taskId,projectId){
+  if(!list.length)return;
+  if(!canAttach(taskId)){toast('Your role cannot attach files here.');return}
+  var t=taskId&&T(taskId),pid=projectId||(t&&t.projectId)||'';
+  if(!t&&!P(pid)){toast('Choose a project first.');return}
+  try{await attPerm();
+    var root=await FS.h.getDirectoryHandle('attachments',{create:true}),dn=attDir(taskId,pid),sub=await root.getDirectoryHandle(dn,{create:true}),n=0;
+    for(var i=0;i<list.length;i++){var f=list[i],base=safeName(f.name),nm=base,k=1;
+      for(;;){try{await sub.getFileHandle(nm);k++;var dot=base.lastIndexOf('.');nm=dot>0?base.slice(0,dot)+' ('+k+')'+base.slice(dot):base+' ('+k+')'}catch(e){if(e&&e.name==='NotFoundError')break;throw e}}
+      var fh=await sub.getFileHandle(nm,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
+      S.files.push({id:uid('a'),taskId:taskId||'',projectId:pid,name:nm,path:'attachments/'+dn+'/'+nm,size:f.size,type:f.type||'',added:Date.now(),by:S.me});n++;
+      log('Attached "'+nm+'"'+(t?' to "'+t.title+'"':' to project "'+(P(pid)||{}).name+'"'))}
+    toast(n+' file(s) copied to "'+FS.h.name+'/attachments/'+dn+'".');commit()}
+  catch(er){toast('Attachment failed: '+((er&&er.message)||er));commit()}}
+async function fileGet(rec){var parts=String(rec.path).split('/');
+  if(!FS.h)throw new Error(FS.pending?'Reconnect the backup folder first (Session page).':'Backup folder not connected.');
+  if(parts.length<3||parts[0]!=='attachments'||parts.some(function(x){return !x||x==='.'||x==='..'}))throw new Error('Invalid attachment path.');
+  await attPerm();var d=FS.h;for(var i=0;i<parts.length-1;i++)d=await d.getDirectoryHandle(parts[i]);
+  return (await d.getFileHandle(parts[parts.length-1])).getFile()}
+function fileRows(list,ro,ctx){return list.map(function(f){var t=f.taskId&&T(f.taskId),p=P(f.projectId);
+  return '<div><span class="grow" style="flex:1;min-width:0"><b>'+esc(f.name)+'</b> <span class="muted small mono">'+fsz(f.size)+' · '+fd(new Date(f.added).toISOString().slice(0,10))+' · '+esc(uname(f.by))+'</span>'+(ctx?'<br><span class="small muted">'+pdot(p)+esc(p?p.name:'—')+(t?' › '+esc(t.title):' › (project)')+'</span>':'')+'<br><span class="small muted mono">'+esc(f.path)+'</span></span><span class="row"><button class="btn sm" data-act="fopen" data-id="'+f.id+'">Open</button><button class="btn sm" data-act="fsave" data-id="'+f.id+'">Save copy</button>'+(canAttach(f.taskId)?'<button class="btn sm dng" data-act="frm" data-id="'+f.id+'" title="Removes the link only; the file stays in the folder">Remove</button>':'')+'</span></div>'}).join('')}
+function attSec(t,ro){var fl=S.files.filter(function(f){return f.taskId===t.id});
+  return '<div class="sec"><h3>Attachments</h3>'+(fl.length?'<div class="lst">'+fileRows(fl,ro,false)+'</div>':'<span class="muted small">No attachments.</span>')+
+   (ro?'':(FS.h?'<label class="small muted" style="display:flex;flex-direction:column;gap:3px">Add files (copied to <span class="mono">'+esc(FS.h.name)+'/attachments/</span>)<input type="file" multiple data-ch="attach" data-task="'+t.id+'"></label>':'<span class="small muted">Connect a backup folder on the Session page to enable attachments: files are copied next to the database.</span>'))+'</div>'}
+function vFiles(){var u=S.ui,pid=u.fpj&&P(u.fpj)?u.fpj:(S.projects[0]?S.projects[0].id:''),tk=u.ftk&&T(u.ftk)&&T(u.ftk).projectId===pid?u.ftk:'',can=canAttach(tk)&&!!pid;
+  var list=S.files.filter(function(f){return !u.ffp||f.projectId===u.ffp}).sort(function(a,b){return b.added-a.added});
+  var head='<section class="card"><h2>Add files</h2>';
+  if(!FS.h)head+='<p style="margin:0 0 10px">'+(FS.pending?'The backup folder <b>'+esc(FS.pending.name)+'</b> needs your permission again.':'No backup folder connected.')+' Attachments are copied into an <span class="mono">attachments</span> subfolder of the folder that holds the database, so a folder must be connected first.</p><button class="btn pri" data-act="nav" data-v="session">Go to Session → Backup folder</button></section>';
+  else head+='<div class="form"><label>Project<select data-ch="fpj">'+opt(pOpts(),pid)+'</select></label><label>Task<select data-ch="ftk">'+opt([['','— project-level file —']].concat(S.tasks.filter(function(t){return t.projectId===pid}).map(function(t){return [t.id,t.title]})),tk)+'</select></label><label class="full">Files<input type="file" multiple data-ch="attach" data-task="'+esc(tk)+'" data-proj="'+esc(pid)+'"'+(can?'':' disabled')+'></label></div><p class="small muted" style="margin:10px 0 0">'+(can?'':'Your role cannot attach files here. ')+'Destination: <span class="mono">'+esc(FS.h.name)+'/attachments/'+esc(pid?attDir(tk,pid):'…')+'/</span>. Files are copied (not moved); existing names get a numeric suffix. Removing an attachment only removes the link: the file stays in the folder.</p></section>';
+  return head+'<section class="card"><h2>All attachments</h2><div class="tools" style="margin-bottom:10px"><select data-ch="ffp" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),u.ffp)+'</select><span class="small muted">'+list.length+' file(s)</span></div>'+(list.length?'<div class="lst">'+fileRows(list,false,true)+'</div>':'<p class="muted" style="margin:0">No attachments yet.</p>')+'</section>'}
+/* ---------- empty database / clear ---------- */
+function emptySession(){var f=function(id,name,type,x){var o={id:id,name:name,type:type};if(type==='select')o.options=x;if(type==='formula')o.formula=x;return o};
+  return {v:1,me:'u1',users:[{id:'u1',name:'Admin',role:'Admin',cap:40}],projects:[],tasks:[],fields:[f('f1','Instrument','select',TOOLS.slice()),f('f2','No. of samples','number'),f('f3','Lot','text'),f('f4','Hours per sample','formula','{est}/{No. of samples}')],rules:[],goals:[],docs:[],files:[],activity:[],ui:defaultUI(),demo:false}}
+function vEmpty(){var ad=isAdmin(),c=S.ui.confirmClear;
+  return '<section class="card"><h2>Empty database</h2><div class="tools"><button class="btn" data-act="emptyfile">Download empty database file</button><button class="btn dng" data-act="clearall"'+(ad?'':' disabled')+'>'+(c?'Confirm: delete ALL projects, tasks, documents, rules':'Clear all project data')+'</button>'+(c?'<button class="btn" data-act="clearcancel">Cancel</button>':'')+'</div><p class="small muted" style="margin:10px 0 0">The empty file (<span class="mono">labpm-empty.json</span>) has no projects or tasks, one Admin user and the default custom fields; open it with <i>Open from file</i> (Admin). <b>Clear all project data</b> (Admin) deletes projects, tasks, hours, goals, documents, rules, attachment links and the activity log, and keeps people, roles and custom fields. Before clearing, an automatic browser snapshot is taken and, if a backup folder is connected, a copy is written there. Files already copied to the <span class="mono">attachments</span> folder are never deleted.</p></section>'}
+
+/* ---------- actions ---------- */
+function defVal(type){return {status_to:'Done',set_status:'In progress',priority:'High',set_priority:'High',project:S.projects[0]?S.projects[0].id:'',set_assignee:''}[type]||''}
+function go(view){S.ui.view=view;S.ui.drawer=null;S.ui.confirmClear=false;save();render();renderDrawer();window.scrollTo(0,0)}
+function download(txt,label){var done=function(){toast(label+' copied to clipboard')};
+  var fb=function(){var a=$('#jb');if(a){a.value=txt;a.focus();a.select()}toast('Clipboard unavailable: text placed in the field, copy it from there')};
+  try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}}
+var A={
+ nav:function(e){go(e.dataset.v)},
+ theme:function(e){S.ui.theme=e.dataset.v;applyTheme();save();render();renderDrawer()},
+ snapsave:function(){var nm=($('#ss-name').value||'').trim()||('Session of '+new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}));
+  var a=getSnaps();a.unshift({id:uid('s'),name:nm,ts:Date.now(),data:snapData()});var cut=a.length>MAXSNAP;if(cut)a.length=MAXSNAP;
+  if(!putSnaps(a)){toast('Browser storage full: save to a file.');return}
+  log('Session saved: '+nm);save();toast(cut?'Session saved; the oldest was removed (max '+MAXSNAP+').':'Session saved in the browser.');renderBody()},
+ snaprestore:function(e){if(!isAdmin())return;var id=e.dataset.id;if(S.ui.confirmSnap!==id){S.ui.confirmSnap=id;renderBody();return}
+  var s=getSnaps().find(function(x){return x.id===id}),o=null;if(!s)return;try{o=normSession(JSON.parse(JSON.stringify(s.data)))}catch(x){}
+  if(!o){toast('Saved session is not valid.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session restored: '+s.name)},
+ snapdel:function(e){var id=e.dataset.id;if(S.ui.confirmSnap!=='d:'+id){S.ui.confirmSnap='d:'+id;renderBody();return}putSnaps(getSnaps().filter(function(s){return s.id!==id}));S.ui.confirmSnap=null;renderBody()},
+ savefile:function(){var txt=JSON.stringify(snapData(),null,1),fn='labpm-session-'+TODAY()+'.json';
+  try{var bl=new Blob([txt],{type:'application/json'}),url=URL.createObjectURL(bl),a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url)},1000);toast('Session saved to file.')}
+  catch(x){download(txt,'Session JSON')}},
+ xlsx:function(){exportTasks()},
+ clearf:function(){var u=S.ui;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';save();renderBody()},
+ foldersel:function(){window.showDirectoryPicker({mode:'readwrite',id:'labpm',startIn:'documents'}).then(folderConnect,function(er){if(!er||er.name!=='AbortError')toast('Cannot open folder: '+((er&&er.message)||'denied'))})},
+ folderre:function(){var h=FS.pending;if(!h)return;h.requestPermission({mode:'readwrite'}).then(function(p){if(p==='granted')return folderConnect(h);toast('Permission not granted.')},function(){toast('Permission not granted.')})},
+ foldernow:function(){folderNow(true).then(function(){if(!FS.err)toast('Copy saved in "'+FS.h.name+'".')})},
+ foldertoggle:function(){FS.on=!FS.on;FS.err='';try{localStorage.setItem('labpm_fs_on',FS.on?'1':'0')}catch(e){}if(FS.on)folderNow(false);renderBody();var el=document.getElementById('sv');if(el)el.textContent=savedText()},
+ foldernone:function(){FS.h=null;FS.pending=null;FS.on=false;FS.err='';idbDo('readwrite',function(st){return st.delete('dir')}).catch(function(){});renderBody();var el=document.getElementById('sv');if(el)el.textContent=savedText()},
+ emptyfile:function(){var blob=new Blob([JSON.stringify(emptySession(),null,1)],{type:'application/json'});saveBlob(blob,'labpm-empty.json','LabPM database','.json','application/json').then(function(ok){if(ok)toast('Empty database file saved.')})},
+ clearall:function(){if(!isAdmin())return;if(!S.ui.confirmClear){S.ui.confirmClear=true;renderBody();return}
+  autoSnap();var wipe=function(){S.projects=[];S.tasks=[];S.goals=[];S.docs=[];S.rules=[];S.files=[];S.activity=[];S.demo=false;var u=S.ui;u.drawer=null;u.confirmClear=false;u.q='';u.fp='';u.fa='';u.fs='';u.fpr='';u.fdf='';u.fdt='';u.fpj='';u.ftk='';u.ffp='';u.doc=null;u.ap=null;u.tpl=null;log('All project data cleared');save();render();renderDrawer();toast('All project data cleared (snapshot saved in Session).')};
+  (FS.h&&FS.on?folderNow(true):Promise.resolve()).then(wipe)},
+ clearcancel:function(){S.ui.confirmClear=false;renderBody()},
+ fopen:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;fileGet(f).then(function(file){var url=URL.createObjectURL(file);if(!window.open(url,'_blank','noopener'))dl(file,f.name);setTimeout(function(){URL.revokeObjectURL(url)},60000)},function(er){toast((er&&er.name==='NotFoundError')?'File not found in the folder (moved or deleted?).':((er&&er.message)||'Cannot open file.'))})},
+ fsave:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;fileGet(f).then(function(file){dl(file,f.name)},function(er){toast((er&&er.name==='NotFoundError')?'File not found in the folder (moved or deleted?).':((er&&er.message)||'Cannot read file.'))})},
+ frm:function(e){var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f||!canAttach(f.taskId))return;S.files=S.files.filter(function(x){return x.id!==f.id});log('Attachment link removed: '+f.name);toast('Link removed; "'+f.name+'" stays in the folder.');commit()},
+ tview:function(e){S.ui.tview=e.dataset.v;save();renderBody()},
+ open:function(e){S.ui.drawer=e.dataset.id;S.ui.confirmDel=null;renderDrawer()},
+ close:function(){S.ui.drawer=null;S.ui.confirmDel=null;renderDrawer()},
+ closeov:function(e,ev){if(ev.target===e)A.close()},
+ newtask:function(){if(!S.projects.length){toast('Create a project first (Portfolio or Templates).');return}var n=newTask({projectId:S.ui.fp||(S.projects[0]&&S.projects[0].id),assignee:S.ui.fa&&S.ui.fa!=='_'?S.ui.fa:null});log('Created "'+n.title+'"');fire({type:'created'},n,0);S.ui.drawer=n.id;commit()},
+ calprev:function(){var a=S.ui.cal.split('-').map(Number),d=new Date(a[0],a[1]-2,1);S.ui.cal=d.getFullYear()+'-'+pad(d.getMonth()+1);save();$('#tv').innerHTML=tv()},
+ calnext:function(){var a=S.ui.cal.split('-').map(Number),d=new Date(a[0],a[1],1);S.ui.cal=d.getFullYear()+'-'+pad(d.getMonth()+1);save();$('#tv').innerHTML=tv()},
+ caltoday:function(){S.ui.cal=TODAY().slice(0,7);save();$('#tv').innerHTML=tv()},
+ timerstart:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t)||t.timer)return;S.tasks.forEach(function(x){if(x.timer&&x.timer.user===S.me)stopTimer(x,true)});t.timer={user:S.me,start:Date.now()};log('Timer started on "'+t.title+'"');commit();render();renderDrawer()},
+ timerstop:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;stopTimer(t);commit();render();renderDrawer()},
+ addlog:function(e){var t=T(e.dataset.id),h=parseFloat($('#lg-h').value);if(!t||!canEdit(t))return;if(!(h>0)){toast('Enter hours (greater than zero).');return}t.log.push({id:uid('l'),u:S.me,date:TODAY(),h:h,note:$('#lg-n').value.trim()});log('Hours on "'+t.title+'": '+nf(h,2));commit()},
+ dellog:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;t.log=t.log.filter(function(l){return l.id!==e.dataset.lid});commit()},
+ deltask:function(e){S.ui.confirmDel=e.dataset.id;renderDrawer()},
+ deltask2:function(e){var id=e.dataset.id,t=T(id);if(!t||!isPM())return;S.tasks=S.tasks.filter(function(x){return x.id!==id});S.tasks.forEach(function(x){x.deps=x.deps.filter(function(d){return d!==id})});var nf2=S.files.filter(function(f){return f.taskId===id}).length;S.files=S.files.filter(function(f){return f.taskId!==id});log('Deleted "'+t.title+'"');if(nf2)toast(nf2+' attachment link(s) removed; the files stay in the attachments folder.');S.ui.drawer=null;S.ui.confirmDel=null;commit()},
+ docsel:function(e,ev){if(ev)ev.preventDefault();S.ui.doc=e.dataset.id;if(e.dataset.go){S.ui.view='docs';S.ui.drawer=null;save();render();renderDrawer()}else{save();renderBody()}},
+ docnew:function(e){var d={id:uid('d'),title:'New document',projectId:'',taskId:e.dataset.task||'',updated:Date.now(),body:'# Title\n\n'};if(d.taskId){var t=T(d.taskId);d.projectId=t.projectId;d.title='Notes: '+t.title}S.docs.push(d);S.ui.doc=d.id;S.ui.view='docs';S.ui.drawer=null;log('Nuovo documento "'+d.title+'"');save();render();renderDrawer()},
+ docdel:function(e){S.docs=S.docs.filter(function(d){return d.id!==e.dataset.id});S.ui.doc=null;save();renderBody()},
+ projadd:function(){var n=$('#np-name').value.trim();if(!n){toast('Enter the project name.');return}S.projects.push({id:uid('p'),name:n,c:S.projects.length%6,status:'auto'});log('New project "'+n+'"');save();renderBody()},
+ projdoc:function(e){var p=P(e.dataset.id),d=S.docs.find(function(x){return x.projectId===p.id&&!x.taskId});if(!d){d={id:uid('d'),title:'Project notes: '+p.name,projectId:p.id,taskId:'',updated:Date.now(),body:'# '+p.name+'\n\n'};S.docs.push(d)}S.ui.doc=d.id;go('docs')},
+ goaladd:function(){var n=$('#ng-name').value.trim(),ps=Array.prototype.slice.call($('#ng-p').selectedOptions).map(function(o){return o.value});if(!n||!ps.length){toast('Enter a name and at least one project.');return}S.goals.push({id:uid('g'),name:n,target:$('#ng-date').value||addD(TODAY(),30),pids:ps});log('New goal "'+n+'"');save();renderBody()},
+ goaldel:function(e){S.goals=S.goals.filter(function(g){return g.id!==e.dataset.id});save();renderBody()},
+ reqsubmit:function(){if(role()==='Viewer'){toast('The Viewer role cannot submit requests.');return}var ti=$('#rq-t').value.trim();if(!ti){toast('Enter a title.');return}
+  var p=S.projects.find(function(x){return x.name==='Internal requests'});if(!p){p={id:uid('p'),name:'Internal requests',c:5,status:'auto'};S.projects.push(p)}
+  var fl=function(n){return S.fields.find(function(f){return f.name===n})},cf={};if(fl('Instrument'))cf[fl('Instrument').id]=$('#rq-tool').value;if(fl('No. of samples'))cf[fl('No. of samples').id]=parseFloat($('#rq-n').value)||1;if(fl('Lot'))cf[fl('Lot').id]=$('#rq-l').value.trim();
+  var d=normWD($('#rq-d').value||addD(TODAY(),7));if(d<normWD(TODAY()))d=normWD(TODAY());
+  var t=newTask({projectId:p.id,title:ti,status:'Triage',priority:$('#rq-p').value,start:normWD(TODAY()),due:d,cf:cf,notes:$('#rq-note').value.trim(),src:'form',requester:$('#rq-r').value.trim(),tags:['request']});
+  log('Request "'+ti+'" from '+(t.requester||'—'));fire({type:'created'},t,0);toast('Request sent to triage.');save();renderBody()},
+ reqaccept:function(e){var t=T(e.dataset.id),s=$('#ra-'+e.dataset.id);if(!t||!isPM())return;t.assignee=s&&s.value||null;applyStatus(t,'To do',0,true);save();renderBody()},
+ ruleadd:function(){var b=S.ui.rb;if(!b.name.trim()){toast('Give the rule a name.');return}
+  var needs=['add_tag','create_task','notify'].indexOf(b.at)>=0&&!b.av.trim();if(needs){toast('Enter the action value.');return}if(b.ct==='tag'&&!b.cv.trim()){toast('Enter the condition tag.');return}
+  S.rules.push({id:uid('r'),name:b.name.trim(),on:true,trigger:{type:b.tt,value:b.tt==='status_to'?b.tv:''},cond:{type:b.ct,value:b.ct==='none'?'':b.cv},action:{type:b.at,value:b.av}});
+  S.ui.rb=defaultUI().rb;log('New rule "'+b.name+'"');save();renderBody()},
+ ruledel:function(e){S.rules=S.rules.filter(function(r){return r.id!==e.dataset.id});save();renderBody()},
+ tplsel:function(e){S.ui.tpl=e.dataset.id||null;renderBody()},
+ tplcreate:function(e){var tp=TPL.find(function(x){return x.id===e.dataset.id}),name=$('#tp-n').value.trim(),start=$('#tp-d').value||TODAY();if(!tp||!name){toast('Enter the project name.');return}
+  var p={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(p);var ids=[];var tf=S.fields.find(function(f){return f.name==='Instrument'});
+  tp.tasks.forEach(function(x){var s=normWD(start);(x.after||[]).forEach(function(k){var pr=T(ids[k]);if(pr){var c=nextWD(pr.due);if(c>s)s=c}});
+   var cf={};if(x.tool&&tf)cf[tf.id]=x.tool;var t=newTask({projectId:p.id,title:x.t,status:'To do',start:s,due:addWD(s,Math.max(x.d-1,0)),est:x.est,deps:(x.after||[]).map(function(k){return ids[k]}),cf:cf});ids.push(t.id);fire({type:'created'},t,0)});
+  log('Project from template "'+tp.name+'"');S.ui.tpl=null;S.ui.fp=p.id;S.ui.tview='timeline';toast('Project created with '+tp.tasks.length+' tasks.');S.ui.view='tasks';save();render()},
+ bulk:function(){var pid=$('#bk-p').value;if(!pid){toast('Create a project first.');return}var lines=$('#bk-t').value.split('\n').map(function(l){return l.trim()}).filter(Boolean);if(!lines.length){toast('Write at least one line.');return}
+  lines.forEach(function(l){var as=/@(\S+)/.exec(l),d=/#(\d+)/.exec(l),h=/~(\d+(?:[.,]\d+)?)h/.exec(l),u=as&&S.users.find(function(x){return x.name.toLowerCase().indexOf(as[1].toLowerCase())>=0});
+   var s=normWD(TODAY()),t=newTask({projectId:pid,title:l.replace(/[@#~]\S+/g,'').replace(/\s+/g,' ').trim()||l,assignee:u?u.id:null,start:s,due:addWD(s,Math.max((d?parseInt(d[1],10):2)-1,0)),est:h?parseFloat(h[1].replace(',','.')):0});fire({type:'created'},t,0)});
+  log('Created '+lines.length+' tasks from list');toast(lines.length+' tasks created.');S.ui.fp=pid;S.ui.tview='list';S.ui.view='tasks';save();render()},
+ fieldadd:function(){var n=$('#nf-n').value.trim(),ty=$('#nf-t').value,x=$('#nf-x').value.trim();if(!n){toast('Enter the field name.');return}if(ty==='formula'&&!x){toast('Write the formula.');return}
+  var f={id:uid('f'),name:n,type:ty};if(ty==='select')f.options=x?x.split(',').map(function(s){return s.trim()}).filter(Boolean):['A','B'];if(ty==='formula')f.formula=x;S.fields.push(f);log('New field "'+n+'"');save();renderBody()},
+ fielddel:function(e){S.fields=S.fields.filter(function(f){return f.id!==e.dataset.id});save();renderBody()},
+ useradd:function(){var n=$('#nu-n').value.trim();if(!n){toast('Enter the name.');return}S.users.push({id:uid('u'),name:n,role:$('#nu-r').value,cap:40});log('New person "'+n+'"');save();renderBody()},
+ userdel:function(e){S.tasks.forEach(function(t){if(t.assignee===e.dataset.id)t.assignee=null});S.users=S.users.filter(function(u){return u.id!==e.dataset.id});save();renderBody()},
+ copyics:function(){var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LabPM//EN'],z=function(s){return String(s).replace(/[\\;,]/g,function(c){return '\\'+c})};
+  S.tasks.filter(function(t){return t.status!=='Done'}).forEach(function(t){L.push('BEGIN:VEVENT','UID:'+t.id+'@labpm','DTSTAMP:'+iso(new Date()).replace(/-/g,'')+'T000000Z','DTSTART;VALUE=DATE:'+t.due.replace(/-/g,''),'SUMMARY:'+z(t.title+' ('+uname(t.assignee)+')'),'END:VEVENT')});L.push('END:VCALENDAR');download(L.join('\r\n'),'ICS calendar')},
+ copyjson:function(){download(JSON.stringify(S),'JSON backup')},
+ impjson:function(){if(!isAdmin())return;var o=null;try{o=normSession(JSON.parse($('#jb').value))}catch(x){}if(!o){toast('Invalid JSON: a LabPM session is required.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session imported.')},
+ reset:function(){if(!isAdmin())return;if(!S.ui.confirmReset){S.ui.confirmReset=true;renderBody();return}autoSnap();S=seed();applyTheme();save();render();renderDrawer();toast('Sample data restored (automatic copy created).')}
+};
+var H={
+ openfile:function(e){var f=e.files&&e.files[0];if(!f)return;if(!isAdmin()){toast('Only Admin can open a session.');e.value='';return}
+  if(f.size>5e6){toast('File too large (max 5 MB).');e.value='';return}
+  var r=new FileReader();r.onload=function(){var o=null;try{o=normSession(JSON.parse(String(r.result)))}catch(x){}
+   if(!o){toast('Invalid file: a LabPM session is required.');return}autoSnap();S=o;applyTheme();save();render();renderDrawer();toast('Session opened: '+f.name)};
+  r.onerror=function(){toast('Unable to read the file.')};r.readAsText(f);e.value=''},
+ me:function(e){S.me=e.value;S.ui.drawer=null;save();render();renderDrawer()},
+ fp:function(e){S.ui.fp=e.value;save();renderBody()},fa:function(e){S.ui.fa=e.value;save();renderBody()},fs:function(e){S.ui.fs=e.value;save();renderBody()},
+ group:function(e){S.ui.group=e.value;save();renderBody()},
+ fpj:function(e){S.ui.fpj=e.value;S.ui.ftk='';save();renderBody()},ftk:function(e){S.ui.ftk=e.value;save();renderBody()},ffp:function(e){S.ui.ffp=e.value;save();renderBody()},
+ attach:function(e){var l=Array.prototype.slice.call(e.files||[]),t=e.dataset.task||'',pj=e.dataset.proj||'';e.value='';attachFiles(l,t,pj)},
+ fpr:function(e){S.ui.fpr=e.value;save();renderBody()},fdf:function(e){S.ui.fdf=e.value;save();renderBody()},fdt:function(e){S.ui.fdt=e.value;save();renderBody()},
+ widget:function(e){S.ui.widgets[e.dataset.k]=e.checked?1:0;save();renderBody()},
+ ap:function(e){S.ui.ap=e.value;renderBody()},
+ pstat:function(e){var p=P(e.dataset.id);if(p&&isPM()){p.status=e.value;save();renderBody()}},
+ docf:function(e){var d=S.docs.find(function(x){return x.id===S.ui.doc});if(!d)return;d[e.dataset.f]=e.value;d.updated=Date.now();if(e.dataset.f==='taskId'&&e.value){var t=T(e.value);if(t)d.projectId=t.projectId}save();renderBody()},
+ rb:function(e){var f=e.dataset.f,b=S.ui.rb;b[f]=e.value;if(f==='tt')b.tv=defVal('status_to');if(f==='ct')b.cv=defVal(e.value);if(f==='at')b.av=defVal(e.value);if(f==='tt'||f==='ct'||f==='at')renderBody()},
+ ruleon:function(e){var r=S.rules.find(function(x){return x.id===e.dataset.id});if(r&&isPM()){r.on=e.checked;save()}},
+ uname:function(e){var u=Uu(e.dataset.id);if(u&&isAdmin()&&e.value.trim()){u.name=e.value.trim();save();render()}},
+ urole:function(e){var u=Uu(e.dataset.id);if(u&&isAdmin()){u.role=e.value;save();render()}},
+ ucap:function(e){var u=Uu(e.dataset.id);if(u&&isAdmin()){u.cap=Math.max(0,parseFloat(e.value)||0);save()}},
+ dr:function(e){var t=T(S.ui.drawer);if(!t||!canEdit(t))return;var f=e.dataset.f,v=e.value,msg='';
+  if(f==='title'){t.title=v.trim()||t.title}
+  else if(f==='project'){t.projectId=v}
+  else if(f==='status'){applyStatus(t,v)}
+  else if(f==='assignee'){if(isPM())t.assignee=v||null}
+  else if(f==='priority'){t.priority=v}
+  else if(f==='start'||f==='due'){var s=f==='start'?v:t.start,d=f==='due'?v:t.due;if(!s||!d){}else if(d<s)toast('The due date is before the start date.');else{var m=setDates(t,s,d);if(m)toast(m+' successor tasks shifted in cascade')}}
+  else if(f==='est'){t.est=Math.max(0,parseFloat(v)||0)}
+  else if(f==='tags'){t.tags=v.split(',').map(function(x){return x.trim()}).filter(Boolean)}
+  else if(f==='notes'){t.notes=v}
+  else if(f.indexOf('cf:')===0){var fid=f.slice(3),fl=S.fields.find(function(x){return x.id===fid});t.cf[fid]=e.type==='checkbox'?e.checked:(fl&&fl.type==='number'&&v!==''?parseFloat(v):v)}
+  else if(f.indexOf('dep:')===0){var id=f.slice(4);if(e.checked){if(t.deps.indexOf(id)<0)t.deps.push(id);var pr=T(id),n=pr?cascadeFrom(pr):0;if(n)toast(n+' tasks shifted in cascade')}else t.deps=t.deps.filter(function(x){return x!==id})}
+  save();commit()}
+};
+
+/* ---------- events ---------- */
+document.addEventListener('click',function(ev){var e=ev.target.closest('[data-act]');if(!e)return;var a=A[e.dataset.act];if(a){if(e.tagName==='A')ev.preventDefault();a(e,ev)}});
+document.addEventListener('change',function(ev){var e=ev.target.closest('[data-ch]');if(!e)return;var h=H[e.dataset.ch];if(h)h(e)});
+document.addEventListener('input',function(ev){var e=ev.target;if(e.matches&&e.matches('[data-in="q"]')){S.ui.q=e.value;$('#tv').innerHTML=tv();var n=$('#xln');if(n)n.textContent=filtered().length;save();return}
+  /* autosave every keystroke in free-text fields (state only; no re-render, so focus is kept) */
+  var c=e.dataset&&e.dataset.ch,f=e.dataset&&e.dataset.f;
+  if(c==='dr'&&f==='notes'){var t=T(S.ui.drawer);if(t&&canEdit(t)){t.notes=e.value;save()}}
+  else if(c==='docf'&&(f==='body'||f==='title')){var d=S.docs.find(function(x){return x.id===S.ui.doc});if(d&&(isPM()||role()==='Researcher')){d[f]=e.value;d.updated=Date.now();save()}}});
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&S.ui.drawer)A.close()});
+document.addEventListener('dragstart',function(ev){var e=ev.target.closest('[data-drag]');if(e){try{ev.dataTransfer.setData('text/plain',e.dataset.drag);ev.dataTransfer.effectAllowed='move'}catch(x){}}});
+document.addEventListener('dragover',function(ev){var c=ev.target.closest('[data-drop]');if(c){ev.preventDefault();c.classList.add('over')}});
+document.addEventListener('dragleave',function(ev){var c=ev.target.closest('[data-drop]');if(c)c.classList.remove('over')});
+document.addEventListener('drop',function(ev){var c=ev.target.closest('[data-drop]');if(!c)return;ev.preventDefault();c.classList.remove('over');var id=ev.dataTransfer.getData('text/plain'),t=T(id);if(!t)return;if(!canEdit(t)){toast('Your role cannot edit this task.');return}if(applyStatus(t,c.dataset.drop))save();renderBody()});
+
+/* ---------- startup ---------- */
+S=load()||seed();
+applyTheme();checkOverdue();save();render();renderDrawer();folderInit();
+setInterval(function(){var t=S.tasks.find(function(x){return x.timer&&x.timer.user===S.me}),b=$('#tbt');if(t&&b)b.textContent=elapsed(t)},1000);
+setInterval(function(){if(checkOverdue()){renderBody()}},60000);
+})();
+</script>
+</body>
+</html>

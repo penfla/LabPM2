@@ -1,0 +1,13 @@
+# License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Flavio Pendolino
+# https://polyformproject.org/licenses/noncommercial/1.0.0
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test

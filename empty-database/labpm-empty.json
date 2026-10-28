@@ -1,0 +1,92 @@
+{
+ "v": 1,
+ "me": "u1",
+ "users": [
+  {
+   "id": "u1",
+   "name": "Admin",
+   "role": "Admin",
+   "cap": 40
+  }
+ ],
+ "projects": [],
+ "tasks": [],
+ "fields": [
+  {
+   "id": "f1",
+   "name": "Instrument",
+   "type": "select",
+   "options": [
+    "DSC",
+    "TGA",
+    "FTIR",
+    "Rheometer",
+    "Extruder",
+    "MFR",
+    "Tensile tester",
+    "OTR",
+    "Other"
+   ]
+  },
+  {
+   "id": "f2",
+   "name": "No. of samples",
+   "type": "number"
+  },
+  {
+   "id": "f3",
+   "name": "Lot",
+   "type": "text"
+  },
+  {
+   "id": "f4",
+   "name": "Hours per sample",
+   "type": "formula",
+   "formula": "{est}/{No. of samples}"
+  }
+ ],
+ "rules": [],
+ "goals": [],
+ "docs": [],
+ "files": [],
+ "activity": [],
+ "ui": {
+  "view": "dashboard",
+  "theme": "light",
+  "saved": 0,
+  "tview": "list",
+  "q": "",
+  "fp": "",
+  "fa": "",
+  "fs": "",
+  "fpr": "",
+  "fdf": "",
+  "fdt": "",
+  "group": "none",
+  "cal": "2026-10",
+  "widgets": {
+   "kpi": 1,
+   "status": 1,
+   "hours": 1,
+   "load": 1,
+   "upcoming": 1,
+   "conflicts": 1,
+   "assistant": 1
+  },
+  "doc": null,
+  "drawer": null,
+  "confirmDel": null,
+  "ap": null,
+  "tpl": null,
+  "rb": {
+   "name": "",
+   "tt": "status_to",
+   "tv": "Done",
+   "ct": "none",
+   "cv": "",
+   "at": "notify",
+   "av": ""
+  }
+ },
+ "demo": false
+}

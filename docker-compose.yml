@@ -1,0 +1,15 @@
+# License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Flavio Pendolino
+# https://polyformproject.org/licenses/noncommercial/1.0.0
+# Put a TLS reverse proxy (Caddy/nginx) in front and set COOKIE_SECURE=1.
+services:
+  labpm:
+    build: .
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    environment:
+      COOKIE_SECURE: "0"
+    volumes:
+      - labpm-data:/data
+volumes:
+  labpm-data:
