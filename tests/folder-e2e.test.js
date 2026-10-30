@@ -46,9 +46,16 @@ test('shared-folder mode: two tabs, no server (login-free identity, merge, files
     // import a v1 session (Admin) -> operations are written to this device's log
     await A.click('[data-act=nav][data-v=session]');
     await A.setInputFiles('input[data-ch=openfile]', { name: 'v1.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(V1)) });
-    await A.waitForTimeout(1500); // 250 ms write debounce + folder write
+    var folder = url.split('#opfs=')[1];
+    await A.waitForFunction(async function (name) { // wait until the import has really been written to the shared folder
+      var l = await (await (await navigator.storage.getDirectory()).getDirectoryHandle(name)).getDirectoryHandle('log');
+      for await (var e of l.entries()) { if ((await (await e[1].getFile()).text()).indexOf('DSC run PP-04') >= 0) return true; }
+      return false;
+    }, folder, { timeout: 20000 });
     // second tab = another PC: auto-enters as the saved identity, then switches to a new user
-    await B.goto(url); await B.waitForSelector('.side');
+    await B.goto(url);
+    // Chromium's OPFS can list a directory stale across tabs for a few seconds; a user would just reload (the page says so)
+    if (!(await B.waitForSelector('.side', { timeout: 8000 }).then(function () { return true; }, function () { return false; }))) { await B.reload(); await B.waitForSelector('.side', { timeout: 15000 }); }
     await B.click('[data-act=logout]');
     await B.selectOption('select[name=user]', '__new'); await B.fill('input[name=name]', 'Anna'); await B.click('button[type=submit]');
     await B.waitForSelector('.side');
