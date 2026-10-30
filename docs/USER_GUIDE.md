@@ -79,7 +79,9 @@ External users cannot reach the form: data is local to the browser.
 
 ## 6. Templates
 
-| Template | Tasks | Standards |
+A template is a named list of steps: title, duration in working days, estimated hours, optional *Instrument*, and the earlier steps each one must wait for (finish-to-start). Five laboratory templates are provided the first time a database is created; afterwards they are ordinary records that Admin and Project manager can edit, duplicate and delete (they are not restored automatically once deleted).
+
+| Provided template | Steps | Standards cited |
 |---|---|---|
 | DSC characterization | 5 | ASTM D3418, ISO 11357-3 |
 | Compound extrusion campaign | 6 | ISO 1133-1 (MFR) |
@@ -87,7 +89,13 @@ External users cannot reach the form: data is local to the browser.
 | Instrument calibration and verification | 4 | – |
 | Analytical method validation | 5 | – |
 
-*Use template* → name + start date → creates a project with dependent tasks scheduled forward on working days (each task starts after its latest predecessor), jumps to Tasks → Timeline. Estimated hours and *Instrument* values are pre-filled; assignees are not.
+**Manage (Templates page, Admin / Project manager)**
+- *New template*, *Duplicate*, *Edit*, *Delete* (two clicks). In the editor change name and description, edit each step, *Add step*, remove a step with ✕ (links to later steps are renumbered). *After steps* takes earlier step numbers, e.g. `1,2`; 1–60 steps, 1–60 days per step.
+- Edits apply to templates used from then on. Tasks already created from a template are not changed.
+
+**Use**
+- *To a project* (Templates page → *Use template*): choose *New project* (name) or an *Existing* project, and the start date. The steps become dependent tasks scheduled forward on working days (each starts after its latest predecessor), then Tasks → Timeline opens. Estimated hours and *Instrument* values are pre-filled; assignees are not.
+- *To a single task* (task panel → *Add template steps*): the steps are created in the task’s project and noted “From template …”. Placement: **After this task** (steps without predecessors start when the task ends), **Before this task** (steps start at the task’s start date; the task waits for the last steps and moves later if needed), or **Independent** (no link).
 
 Standards: https://www.astm.org · https://www.iso.org. Templates only cite the standard number; verify method parameters against the current edition.
 

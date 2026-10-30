@@ -335,6 +335,18 @@ var N = {
   },
   goals: function (o) { return { id: o.id, name: str(o.name, 160), target: isDate(o.target) ? o.target : '', pids: Array.isArray(o.pids) ? o.pids.filter(idOrNull) : [] }; },
   docs: function (o) { return { id: o.id, title: str(o.title, 200), body: str(o.body, 200000), projectId: idOrNull(o.projectId), taskId: idOrNull(o.taskId), updated: isFinite(+o.updated) ? +o.updated : Date.now() }; },
+  templates: function (o) {
+    var steps = Array.isArray(o.tasks) ? o.tasks.slice(0, 60) : [];
+    if (!steps.length) bad('a template needs at least one step');
+    return { id: o.id, name: str(o.name, 120) || 'Template', desc: str(o.desc, 500), tasks: steps.map(function (x, i) {
+      x = x && typeof x === 'object' ? x : {};
+      var after = Array.isArray(x.after) ? x.after.filter(function (k, j, a) { return Number.isInteger(k) && k >= 0 && k < i && a.indexOf(k) === j; }) : [];
+      var s = { t: str(x.t, 300) || 'Step ' + (i + 1), d: Math.min(60, Math.max(1, Math.round(num(x.d, 1)))), est: num(x.est, 0) };
+      var tool = str(x.tool, 40); if (tool) s.tool = tool;
+      if (after.length) s.after = after;
+      return s;
+    }) };
+  },
   files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
 };
 
@@ -429,6 +441,29 @@ function parseLog(text) {
 
 module.exports = { Fold: Fold, parseLog: parseLog };
 return module.exports})();
+var LabTemplates=(function(){var module={exports:{}};
+var DEFAULTS=[
+ {id:'tpl-dsc',name:'DSC characterization',desc:'ASTM D3418 / ISO 11357-3: from sample preparation to report.',tasks:[
+  {t:'Sample preparation and weighing',d:1,est:3},{t:'DSC calibration check (In/Zn)',d:1,est:2,tool:'DSC'},
+  {t:'DSC run: 1st heating, cooling, 2nd heating',d:2,est:8,tool:'DSC',after:[0,1]},
+  {t:'Data processing: Tm, Tc, ΔHm and crystallinity',d:1,est:3,after:[2]},{t:'Report and data archiving',d:1,est:2,after:[3]}]},
+ {id:'tpl-ext',name:'Compound extrusion campaign',desc:'Drying, twin-screw setup, run, sampling and basic characterization.',tasks:[
+  {t:'Raw material drying',d:1,est:4},{t:'Thermal profile and feeding setup',d:1,est:6,tool:'Extruder',after:[0]},
+  {t:'Extrusion run and sampling',d:2,est:14,tool:'Extruder',after:[1]},{t:'MFR (ISO 1133-1)',d:1,est:4,tool:'MFR',after:[2]},
+  {t:'DSC on pellets',d:2,est:6,tool:'DSC',after:[2]},{t:'Campaign report',d:2,est:8,after:[3,4]}]},
+ {id:'tpl-film',name:'PE/EVOH/PE multilayer film',desc:'Coextrusion, conditioning, O₂ barrier and mechanical properties.',tasks:[
+  {t:'Structure and thickness definition',d:1,est:4},{t:'Film coextrusion',d:2,est:16,tool:'Extruder',after:[0]},
+  {t:'Specimen conditioning',d:2,est:1,after:[1]},{t:'OTR (ASTM D3985)',d:3,est:8,tool:'OTR',after:[2]},
+  {t:'Tensile test (ISO 527-3)',d:2,est:6,tool:'Tensile tester',after:[2]},{t:'Barrier and mechanical report',d:2,est:8,after:[3,4]}]},
+ {id:'tpl-cal',name:'Instrument calibration and verification',desc:'Planning, execution, deviation assessment and report.',tasks:[
+  {t:'Planning and reference materials',d:1,est:2},{t:'Calibration execution',d:1,est:4,after:[0]},
+  {t:'Deviation assessment',d:1,est:2,after:[1]},{t:'Calibration report and sign-off',d:1,est:2,after:[2]}]},
+ {id:'tpl-val',name:'Analytical method validation',desc:'Plan, repeatability, reproducibility, uncertainty and report.',tasks:[
+  {t:'Validation plan',d:2,est:6},{t:'Repeatability tests',d:3,est:12,after:[0]},{t:'Reproducibility tests (second operator)',d:3,est:12,after:[1]},
+  {t:'Uncertainty estimation',d:2,est:6,after:[2]},{t:'Validation report',d:2,est:8,after:[3]}]}];
+
+module.exports = { DEFAULTS: DEFAULTS };
+return module.exports})();
 /*INLINE:end*/
 var STATUSES=['Triage','To do','In progress','In review','Done'];
 var SCOL={'Triage':'--s0','To do':'--s1','In progress':'--s2','In review':'--s3','Done':'--s4'};
@@ -468,13 +503,13 @@ function opt(arr,val){return arr.map(function(a){var v=Array.isArray(a)?a[0]:a,l
 var S;
 function defaultUI(){var d=new Date();return {view:'dashboard',theme:'light',saved:0,tview:'list',q:'',fp:'',fa:'',fs:'',fpr:'',fdf:'',fdt:'',group:'none',cal:d.getFullYear()+'-'+pad(d.getMonth()+1),widgets:{kpi:1,status:1,hours:1,load:1,upcoming:1,conflicts:1,assistant:1},doc:null,drawer:null,confirmDel:null,ap:null,tpl:null,rb:{name:'',tt:'status_to',tv:'Done',ct:'none',cv:'',at:'notify',av:''}}}
 /* ---------- server sync (v2): API client, diff-based push, SSE pull, auth screens ---------- */
-var COLS=['users','projects','tasks','fields','rules','goals','docs'];
+var COLS=['users','projects','tasks','fields','rules','goals','docs','templates'];
 var MODE='server';
 var CID=uid('c'),ME=null,REV={},SHADOW={},SY={st:'boot',last:0,busy:false,dirty:false,timer:null,es:null,pend:false,msg:''};
 function api(method,path,body,rev){var h={'X-Client-Id':CID};if(body!==undefined)h['Content-Type']='application/json';if(rev!=null)h['If-Match']=String(rev);
   return fetch(path,{method:method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {s:r.status,j:j}})})}
 function uiKey(){return 'labpm2_ui_'+(ME?ME.id:'')}
-function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null})}catch(e){}return defaultUI()}
+function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null,tpledit:null,tpldel:null})}catch(e){}return defaultUI()}
 function savedText(){var t=SY.last?hhmm(SY.last):'',m={boot:'Connecting…',ok:MODE==='folder'?(FB.ro?'Read-only · folder loaded '+t:'Shared folder · synced '+t):'Synced '+t,sync:'Syncing…',off:'Offline: retrying, changes kept in this page',err:SY.msg||'Sync error'};return m[SY.st]||''}
 function hhmm(ts){return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function svStatus(st,msg){SY.st=st;SY.msg=msg||'';var el=document.getElementById('sv');if(el)el.textContent=savedText()}
@@ -518,7 +553,7 @@ function openStream(){if(SY.es)SY.es.close();var es=new EventSource('/api/events
   es.onerror=function(){if(SY.st==='ok')svStatus('off');api('GET','/api/me').then(function(r){if(r.s===401){es.close();showLogin()}})};
   es.onopen=function(){if(SY.st==='off')svStatus('ok')}}
 function loadState(){return api('GET','/api/state').then(function(r){if(r.s!==200)throw new Error('state '+r.s);var st=r.j.state;REV=r.j.revs;SY.seq=r.j.seq;
-  S={v:1,me:ME.id,users:st.users,projects:st.projects,tasks:st.tasks,fields:st.fields,rules:st.rules,goals:st.goals,docs:st.docs,files:st.files||[],activity:[],ui:loadUi(),demo:false};
+  S={v:1,me:ME.id,users:st.users,projects:st.projects,tasks:st.tasks,fields:st.fields,rules:st.rules,goals:st.goals,docs:st.docs,templates:st.templates||[],files:st.files||[],activity:[],ui:loadUi(),demo:false};
   if(NAVFLAT.every(function(n){return n[0]!==S.ui.view}))S.ui.view='dashboard';snapshotShadow();applyTheme();svStatus('ok');SY.last=Date.now();
   render();renderDrawer();openStream()})}
 /* auth screens */
@@ -572,7 +607,7 @@ async function readLogs(){var changed=[],own=FB.dev+'.jsonl';
     var f=await fh.getFile(),c=FB.files[name];if(c&&c.size===f.size&&c.mtime===f.lastModified)continue;FB.files[name]={size:f.size,mtime:f.lastModified};
     LabFold.parseLog(await f.text()).forEach(function(o){var k=FB.fold.apply(o);if(k)changed.push([k,o])})}
   return changed}
-function foldState(){var st={v:1,me:'',users:[],projects:[],tasks:[],fields:[],rules:[],goals:[],docs:[],files:[],activity:[],ui:defaultUI(),demo:false};
+function foldState(){var st={v:1,me:'',users:[],projects:[],tasks:[],fields:[],rules:[],goals:[],docs:[],templates:[],files:[],activity:[],ui:defaultUI(),demo:false};
   FB.fold.keys().forEach(function(kk){var i=kk.indexOf('/'),k=kk.slice(0,i),id=kk.slice(i+1);if(!Array.isArray(st[k]))return;var d=FB.fold.get(k,id);if(d)st[k].push(d)});
   Object.keys(st).forEach(function(k){if(Array.isArray(st[k]))st[k].sort(function(a,b){return FB.fold.order(k,a.id)-FB.fold.order(k,b.id)})});return st}
 async function compactOwn(){try{var fh=await FB.logs.getFileHandle(FB.dev+'.jsonl'),f=await fh.getFile();if(f.size<1e6)return;
@@ -584,8 +619,10 @@ function folderIdentity(){if(FB.poll){clearInterval(FB.poll);FB.poll=null}ME=nul
   $('#app').innerHTML='<div class="app" id="auth" style="display:grid;place-items:center;min-height:80vh"><form class="card" style="max-width:380px;width:100%" data-form="fident"><h2>'+(users.length?'LabPM — who are you?':'Create the first Admin')+'</h2><div class="form">'+sel+''+(FB.ro?'':'<label class="full">'+(users.length?'Your name (only if you are new)':'Your name')+'<input name="name" autocomplete="name"'+(users.length?'':' required')+'></label>')+'<label class="full"><button class="btn pri" type="submit">Continue</button></label></div><p class="small muted">'+(users.length?'':'If colleagues already use this folder, wait a few seconds and reload this page before creating an Admin. ')+'Shared-folder mode has no passwords: roles organise the interface but are not access control (see SECURITY.md). Folder: '+esc(FB.h.name)+(FB.ro?' (read-only in this browser)':'')+'</p></form></div>'}
 function folderSubmit(d){var uid0=d.user,u=null;if(!uid0||uid0==='__new'){var nm=(d.name||'').trim();if(!nm)return;u={id:uid('u'),name:nm.slice(0,120),role:S.users.length?'Researcher':'Admin',cap:40};S.users.push(u);uid0=u.id}
   try{localStorage.setItem('labpm_me_'+FB.id,uid0)}catch(e){}enterFolder(uid0);if(u){delete SHADOW[key('users',u.id)];syncSchedule()}}
-function enterFolder(id){ME=Uu(id);S.me=ME.id;S.ui=loadUi();if(NAVFLAT.every(function(n){return n[0]!==S.ui.view}))S.ui.view='dashboard';snapshotShadow();applyTheme();svStatus('ok');SY.last=Date.now();
+function enterFolder(id){ME=Uu(id);S.me=ME.id;S.ui=loadUi();if(NAVFLAT.every(function(n){return n[0]!==S.ui.view}))S.ui.view='dashboard';snapshotShadow();seedTemplatesLocal();applyTheme();svStatus('ok');SY.last=Date.now();
   render();renderDrawer();if(FB.ro)return;FB.poll=setInterval(pollFolder,4000);setTimeout(folderSweep,1500);folderBackup(false).catch(function(){})}
+/* built-in templates are seeded once per folder: an id that already has history (even deleted) is never re-created */
+function seedTemplatesLocal(){if(MODE!=='folder'||FB.ro||!isPM())return;var n=0;LabTemplates.DEFAULTS.forEach(function(t){if(FB.fold.ent['templates/'+t.id]||S.templates.some(function(x){return x.id===t.id}))return;S.templates.push(JSON.parse(JSON.stringify(t)));n++});if(n)syncSchedule()}
 function pollFolder(){if(FB.polling||!FB.fold)return;FB.polling=true;
   readLogs().then(function(ch){FB.polling=false;if(SY.st==='off')svStatus('ok');SY.last=Date.now();var seen={};ch.forEach(function(c){seen[c[0]]=c[1]});
     Object.keys(seen).forEach(function(kk){var i=kk.indexOf('/'),k=kk.slice(0,i),id=kk.slice(i+1);if(COLS.indexOf(k)<0&&k!=='files')return;var d=FB.fold.get(k,id);
@@ -630,7 +667,7 @@ async function folderBackup(force){var d=new Date(),ymd=iso(d).replace(/-/g,''),
 async function folderBackupList(){var out=[];for await(var e of FB.bak.entries()){if(e[1].kind==='file'&&/^labpm-\d{8}(-\d{4})?\.json$/.test(e[0])){var f=await e[1].getFile();out.push({name:e[0],size:f.size,mtime:f.lastModified})}}return out.sort(function(a,b){return a.name<b.name?1:-1})}
 /* replace (restore) or merge (import) a v1 session object into the live state; the normal diff then writes the operations */
 function foldIn(o,replace,withUsers){var n=0,bad=0,keep={};
-  COLS.forEach(function(k){if(k==='users'&&!withUsers&&!replace)return;var list=Array.isArray(o[k])?o[k]:[];keep[k]={};
+  COLS.forEach(function(k){if(k==='users'&&!withUsers&&!replace)return;if(!Array.isArray(o[k]))return;var list=o[k];keep[k]={};
     list.forEach(function(r){try{if(k==='tasks')r=Object.assign({},r,{timer:null});var d=LabValidate.normalize(k,r);keep[k][d.id]=1;var i=S[k].findIndex(function(x){return x.id===d.id});if(i>=0)S[k][i]=d;else S[k].push(d);n++}catch(e){bad++}});
     if(replace)S[k]=S[k].filter(function(x){return keep[k][x.id]||(k==='users'&&x.id===ME.id)})});
   return {n:n,bad:bad}}
@@ -876,30 +913,35 @@ function vAuto(){var b=S.ui.rb,ed=isPM();
    '<label class="full"><button class="btn pri" data-act="ruleadd" style="width:max-content">Add rule</button></label></div><p class="small muted" style="margin:10px 0 0">Rules apply on every change. Overdue rules are evaluated on load and every minute. Maximum chain depth: 3.</p></section>':'')}
 
 /* ---------- templates ---------- */
-var TPL=[
- {id:'dsc',name:'DSC characterization',desc:'ASTM D3418 / ISO 11357-3: from sample preparation to report.',tasks:[
-  {t:'Sample preparation and weighing',d:1,est:3},{t:'DSC calibration check (In/Zn)',d:1,est:2,tool:'DSC'},
-  {t:'DSC run: 1st heating, cooling, 2nd heating',d:2,est:8,tool:'DSC',after:[0,1]},
-  {t:'Data processing: Tm, Tc, ΔHm and crystallinity',d:1,est:3,after:[2]},{t:'Report and data archiving',d:1,est:2,after:[3]}]},
- {id:'ext',name:'Compound extrusion campaign',desc:'Drying, twin-screw setup, run, sampling and basic characterization.',tasks:[
-  {t:'Raw material drying',d:1,est:4},{t:'Thermal profile and feeding setup',d:1,est:6,tool:'Extruder',after:[0]},
-  {t:'Extrusion run and sampling',d:2,est:14,tool:'Extruder',after:[1]},{t:'MFR (ISO 1133-1)',d:1,est:4,tool:'MFR',after:[2]},
-  {t:'DSC on pellets',d:2,est:6,tool:'DSC',after:[2]},{t:'Campaign report',d:2,est:8,after:[3,4]}]},
- {id:'film',name:'PE/EVOH/PE multilayer film',desc:'Coextrusion, conditioning, O₂ barrier and mechanical properties.',tasks:[
-  {t:'Structure and thickness definition',d:1,est:4},{t:'Film coextrusion',d:2,est:16,tool:'Extruder',after:[0]},
-  {t:'Specimen conditioning',d:2,est:1,after:[1]},{t:'OTR (ASTM D3985)',d:3,est:8,tool:'OTR',after:[2]},
-  {t:'Tensile test (ISO 527-3)',d:2,est:6,tool:'Tensile tester',after:[2]},{t:'Barrier and mechanical report',d:2,est:8,after:[3,4]}]},
- {id:'cal',name:'Instrument calibration and verification',desc:'Planning, execution, deviation assessment and report.',tasks:[
-  {t:'Planning and reference materials',d:1,est:2},{t:'Calibration execution',d:1,est:4,after:[0]},
-  {t:'Deviation assessment',d:1,est:2,after:[1]},{t:'Calibration report and sign-off',d:1,est:2,after:[2]}]},
- {id:'val',name:'Analytical method validation',desc:'Plan, repeatability, reproducibility, uncertainty and report.',tasks:[
-  {t:'Validation plan',d:2,est:6},{t:'Repeatability tests',d:3,est:12,after:[0]},{t:'Reproducibility tests (second operator)',d:3,est:12,after:[1]},
-  {t:'Uncertainty estimation',d:2,est:6,after:[2]},{t:'Validation report',d:2,est:8,after:[3]}]}];
-function vTpl(){var sel=S.ui.tpl;
-  return '<div class="wgrid">'+TPL.map(function(t){return '<section class="card"><h2>'+esc(t.name)+'</h2><p class="muted">'+esc(t.desc)+'</p><ol class="small">'+t.tasks.map(function(x){return '<li>'+esc(x.t)+' <span class="mono muted">'+x.d+' d'+(x.after?' · after '+x.after.map(function(k){return k+1}).join(','):'')+'</span></li>'}).join('')+'</ol>'+
-   (isPM()?(sel===t.id?'<div class="form"><label>Project name<input id="tp-n" value="'+esc(t.name)+' ('+new Date().toLocaleDateString('en-GB')+')"></label><label>Start<input type="date" id="tp-d" value="'+normWD(TODAY())+'"></label><label class="full"><span class="row"><button class="btn pri" data-act="tplcreate" data-id="'+t.id+'">Create project</button><button class="btn" data-act="tplsel" data-id="">Cancel</button></span></label></div>':'<button class="btn" data-act="tplsel" data-id="'+t.id+'">Use template</button>'):'')+'</section>'}).join('')+'</div>'+
+var TP=function(id){return S.templates.find(function(t){return t.id===id})};
+/* create the steps of a template: mode 'none' (independent), 'after' (first steps wait for anchor), 'before' (anchor waits for the last steps) */
+function applyTpl(tp,projectId,start,anchor,mode){var tf=S.fields.find(function(f){return f.name==='Instrument'}),ids=[],made=[],base=normWD(start);
+  if(mode==='after'&&anchor){var c0=nextWD(anchor.due);if(c0>base)base=c0}
+  tp.tasks.forEach(function(x){var s=base,deps=(x.after||[]).map(function(k){return ids[k]}).filter(Boolean);
+    deps.forEach(function(id){var pr=T(id);if(pr){var c=nextWD(pr.due);if(c>s)s=c}});
+    if(mode==='after'&&anchor&&!(x.after||[]).length)deps.push(anchor.id);
+    var cf={};if(x.tool&&tf)cf[tf.id]=x.tool;
+    var t=newTask({projectId:projectId,title:x.t,status:'To do',start:s,due:addWD(s,Math.max(x.d-1,0)),est:x.est,deps:deps,cf:cf,notes:'From template "'+tp.name+'"'});ids.push(t.id);made.push(t)});
+  if(mode==='before'&&anchor){var succ={},end='';tp.tasks.forEach(function(x){(x.after||[]).forEach(function(k){succ[k]=1})});
+    tp.tasks.forEach(function(x,i){if(!succ[i]){if(anchor.deps.indexOf(ids[i])<0)anchor.deps.push(ids[i]);var d=T(ids[i]).due;if(d>end)end=d}});
+    if(end&&anchor.start<=end){var dur=diffWD(anchor.start,anchor.due),ns=nextWD(end);anchor.start=ns;anchor.due=addWD(ns,dur);anchor.ovFired=false}}
+  return made}
+function tplEditor(t){var rows=t.tasks.map(function(x,i){var at=' data-ch="tps" data-id="'+esc(t.id)+'" data-i="'+i+'"';
+  return '<tr><td class="mono">'+(i+1)+'</td><td><input'+at+' data-f="t" value="'+esc(x.t)+'" style="min-width:220px"></td><td><input type="number" min="1" max="60"'+at+' data-f="d" value="'+x.d+'" style="width:64px"></td><td><input type="number" min="0" step="0.5"'+at+' data-f="est" value="'+x.est+'" style="width:72px"></td><td><select'+at+' data-f="tool">'+opt([['','—']].concat(TOOLS.map(function(k){return [k,k]})),x.tool||'')+'</select></td><td><input'+at+' data-f="after" placeholder="e.g. 1,2" value="'+esc((x.after||[]).map(function(k){return k+1}).join(','))+'" style="width:90px"></td><td><button class="btn sm dng" data-act="tplstepdel" data-id="'+esc(t.id)+'" data-i="'+i+'" aria-label="Remove step">✕</button></td></tr>'}).join('');
+  return '<section class="card" style="grid-column:1/-1"><h2>Edit template</h2><div class="form"><label>Name<input data-ch="tpf" data-id="'+esc(t.id)+'" data-f="name" value="'+esc(t.name)+'"></label><label class="full">Description<input data-ch="tpf" data-id="'+esc(t.id)+'" data-f="desc" value="'+esc(t.desc)+'"></label></div>'+
+   '<div class="tbw" style="margin-top:10px"><table class="tbl" style="min-width:640px"><thead><tr><th>#</th><th>Step</th><th>Days</th><th>Est. h</th><th>Instrument</th><th>After steps</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+   '<p class="small muted">“After steps” lists earlier step numbers that must finish first (finish-to-start). Changes are saved as you leave each field and apply to templates used from now on; tasks already created are not changed.</p>'+
+   '<div class="row"><button class="btn" data-act="tplstepadd" data-id="'+esc(t.id)+'">Add step</button><button class="btn pri" data-act="tpledit" data-id="">Done</button></div></section>'}
+function tplCard(t,pm){var sel=S.ui.tpl===t.id;
+  if(pm&&S.ui.tpledit===t.id)return tplEditor(t);
+  var btns='';
+  if(pm){if(sel)btns='<div class="form"><label>Apply to<select id="tp-t">'+opt([['','New project (name below)']].concat(S.projects.map(function(p){return [p.id,'Existing: '+p.name]})),'')+'</select></label><label>Start<input type="date" id="tp-d" value="'+normWD(TODAY())+'"></label><label class="full">Name of the new project<input id="tp-n" value="'+esc(t.name)+' ('+new Date().toLocaleDateString('en-GB')+')"></label><label class="full"><span class="row"><button class="btn pri" data-act="tplcreate" data-id="'+esc(t.id)+'">Apply template</button><button class="btn" data-act="tplsel" data-id="">Cancel</button></span></label></div>';
+    else btns='<div class="row" style="flex-wrap:wrap"><button class="btn" data-act="tplsel" data-id="'+esc(t.id)+'">Use template</button><button class="btn" data-act="tpledit" data-id="'+esc(t.id)+'">Edit</button><button class="btn" data-act="tpldup" data-id="'+esc(t.id)+'">Duplicate</button><button class="btn dng" data-act="'+(S.ui.tpldel===t.id?'tpldel2':'tpldel')+'" data-id="'+esc(t.id)+'">'+(S.ui.tpldel===t.id?'Confirm delete':'Delete')+'</button></div>'}
+  return '<section class="card"><h2>'+esc(t.name)+'</h2><p class="muted">'+esc(t.desc)+'</p><ol class="small">'+t.tasks.map(function(x){return '<li>'+esc(x.t)+' <span class="mono muted">'+x.d+' d'+(x.after?' · after '+x.after.map(function(k){return k+1}).join(','):'')+'</span></li>'}).join('')+'</ol>'+btns+'</section>'}
+function vTpl(){var pm=isPM();
+  return (pm?'<div class="tools" style="margin-bottom:10px"><button class="btn pri" data-act="tplnew">New template</button><span class="small muted">Templates apply to a new or existing project (here) and to a single task (task panel → Add template steps).</span></div>':'')+
+  '<div class="wgrid">'+(S.templates.length?S.templates.map(function(t){return tplCard(t,pm)}).join(''):'<p class="muted">No templates. '+(pm?'Create one with “New template”.':'')+'</p>')+'</div>'+
   (isPM()?'<section class="card"><h2>Create tasks from a list</h2><div class="form"><label>Project<select id="bk-p">'+opt(pOpts(),S.ui.fp||(S.projects[0]&&S.projects[0].id))+'</select></label><label class="full">One task per line. Options: <span class="mono">@surname</span> assigns, <span class="mono">#3</span> duration in days, <span class="mono">~6h</span> estimated hours<textarea id="bk-t" rows="5" placeholder="Weigh samples @Bianchi #1 ~3h&#10;FTIR on 8 films @Neri #2 ~6h"></textarea></label><label class="full"><button class="btn pri" data-act="bulk" style="width:max-content">Create tasks</button></label></div></section>':'')}
-
 /* ---------- settings ---------- */
 function vSet(){var ad=isAdmin(),json='';
   var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?(MODE==='folder'?'':'<button class="btn sm" data-act="userpw" data-id="'+u.id+'">Reset password</button> ')+'<button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
@@ -972,6 +1014,7 @@ function renderDrawer(){
    '<div class="sec"><h3>Time</h3><div class="row"><span class="mono">'+nf(logged(t),2)+' h logged / '+nf(t.est)+' h estimated</span>'+(ro?'':(running?'<button class="btn dng sm" data-act="timerstop" data-id="'+t.id+'">Stop timer ('+esc(uname(running.user))+')</button>':'<button class="btn sm" data-act="timerstart" data-id="'+t.id+'">Start timer</button>'))+'</div>'+
    (ro?'':'<div class="row"><input type="number" id="lg-h" min="0" step="0.25" placeholder="hours" style="width:80px"><input id="lg-n" placeholder="note" class="grow"><button class="btn sm" data-act="addlog" data-id="'+t.id+'">Add</button></div>')+
    '<div class="lst small">'+t.log.slice(-8).reverse().map(function(l){return '<div><span><span class="mono">'+fd(l.date)+'</span> · '+esc(uname(l.u))+' · <b class="mono">'+nf(l.h,2)+' h</b> '+esc(l.note||'')+'</span>'+(ro?'':'<button class="btn sm" data-act="dellog" data-id="'+t.id+'" data-lid="'+l.id+'">×</button>')+'</div>'}).join('')+'</div></div>'+
+   (isPM()&&S.templates.length?'<div class="sec"><h3>Add template steps</h3><div class="form"><label>Template<select id="dt-t">'+opt(S.templates.map(function(x){return [x.id,x.name]}),S.templates[0].id)+'</select></label><label>Placement<select id="dt-m">'+opt([['after','After this task'],['before','Before this task'],['none','Independent (no link)']],'after')+'</select></label><label class="full"><button class="btn" data-act="tpltask" data-id="'+t.id+'" style="width:max-content">Add steps</button></label></div><p class="small muted" style="margin:6px 0 0">Creates the template steps in this task’s project. After: the first steps start when this task ends. Before: this task waits for the last steps and moves later if needed.</p></div>':'')+
    attSec(t,ro)+
    '<div class="sec"><h3>Notes</h3><textarea rows="3" data-ch="dr" data-f="notes"'+dis+'>'+esc(t.notes)+'</textarea></div>'+
    '<div class="sec"><h3>Documents</h3>'+(docs.map(function(d){return '<div><a href="#" data-act="docsel" data-id="'+d.id+'" data-go="1">'+esc(d.title)+'</a></div>'}).join('')||'<span class="muted small">No linked documents.</span>')+(isPM()||role()==='Researcher'?'<button class="btn sm" data-act="docnew" data-task="'+t.id+'" style="width:max-content">New document for this task</button>':'')+'</div>'+
@@ -1056,7 +1099,7 @@ function vFiles(){var u=S.ui,pid=u.fpj&&P(u.fpj)?u.fpj:'',list=S.files.filter(fu
 function emptySession(){var f=function(id,name,type,x){var o={id:id,name:name,type:type};if(type==='select')o.options=x;if(type==='formula')o.formula=x;return o};
   return {v:1,me:'u1',users:[{id:'u1',name:'Admin',role:'Admin',cap:40}],projects:[],tasks:[],fields:[f('f1','Instrument','select',TOOLS.slice()),f('f2','No. of samples','number'),f('f3','Lot','text'),f('f4','Hours per sample','formula','{est}/{No. of samples}')],rules:[],goals:[],docs:[],files:[],activity:[],ui:defaultUI(),demo:false}}
 function vEmpty(){var ad=isAdmin(),c=S.ui.confirmClear;
-  return '<section class="card"><h2>Empty database</h2><div class="tools"><button class="btn" data-act="emptyfile">Download empty database file</button><button class="btn dng" data-act="clearall"'+(ad?'':' disabled')+'>'+(c?'Confirm: delete ALL projects, tasks, documents, rules':'Clear all project data')+'</button>'+(c?'<button class="btn" data-act="clearcancel">Cancel</button>':'')+'</div><p class="small muted" style="margin:10px 0 0">The empty file has no projects or tasks and the default custom fields; import it above. <b>Clear all project data</b> (Admin) deletes projects, tasks, hours, goals, documents and rules for everyone, and keeps people, roles and custom fields. Download the full database first: this cannot be undone.</p></section>'}
+  return '<section class="card"><h2>Empty database</h2><div class="tools"><button class="btn" data-act="emptyfile">Download empty database file</button><button class="btn dng" data-act="clearall"'+(ad?'':' disabled')+'>'+(c?'Confirm: delete ALL projects, tasks, documents, rules':'Clear all project data')+'</button>'+(c?'<button class="btn" data-act="clearcancel">Cancel</button>':'')+'</div><p class="small muted" style="margin:10px 0 0">The empty file has no projects or tasks and the default custom fields; import it above. <b>Clear all project data</b> (Admin) deletes projects, tasks, hours, goals, documents and rules for everyone, and keeps people, roles, custom fields and templates. Download the full database first: this cannot be undone.</p></section>'}
 
 /* ---------- actions ---------- */
 function defVal(type){return {status_to:'Done',set_status:'In progress',priority:'High',set_priority:'High',project:S.projects[0]?S.projects[0].id:'',set_assignee:''}[type]||''}
@@ -1112,11 +1155,19 @@ var A={
   S.ui.rb=defaultUI().rb;log('New rule "'+b.name+'"');save();renderBody()},
  ruledel:function(e){S.rules=S.rules.filter(function(r){return r.id!==e.dataset.id});save();renderBody()},
  tplsel:function(e){S.ui.tpl=e.dataset.id||null;renderBody()},
- tplcreate:function(e){var tp=TPL.find(function(x){return x.id===e.dataset.id}),name=$('#tp-n').value.trim(),start=$('#tp-d').value||TODAY();if(!tp||!name){toast('Enter the project name.');return}
-  var p={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(p);var ids=[];var tf=S.fields.find(function(f){return f.name==='Instrument'});
-  tp.tasks.forEach(function(x){var s=normWD(start);(x.after||[]).forEach(function(k){var pr=T(ids[k]);if(pr){var c=nextWD(pr.due);if(c>s)s=c}});
-   var cf={};if(x.tool&&tf)cf[tf.id]=x.tool;var t=newTask({projectId:p.id,title:x.t,status:'To do',start:s,due:addWD(s,Math.max(x.d-1,0)),est:x.est,deps:(x.after||[]).map(function(k){return ids[k]}),cf:cf});ids.push(t.id)});
-  log('Project from template "'+tp.name+'"');S.ui.tpl=null;S.ui.fp=p.id;S.ui.tview='timeline';toast('Project created with '+tp.tasks.length+' tasks.');S.ui.view='tasks';save();render()},
+ tplcreate:function(e){var tp=TP(e.dataset.id),target=$('#tp-t').value,start=$('#tp-d').value||TODAY(),p;if(!tp||!isPM())return;
+  if(target){p=P(target);if(!p){toast('Project not found.');return}}else{var name=$('#tp-n').value.trim();if(!name){toast('Enter the project name.');return}p={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(p)}
+  var made=applyTpl(tp,p.id,start,null,'none');log('Template "'+tp.name+'" applied to project "'+p.name+'"');S.ui.tpl=null;S.ui.fp=p.id;S.ui.tview='timeline';toast(made.length+' tasks added to "'+p.name+'".');S.ui.view='tasks';save();render()},
+ tpltask:function(e){var a=T(e.dataset.id),tp=TP($('#dt-t').value),mode=$('#dt-m').value;if(!a||!tp||!isPM())return;
+  var made=applyTpl(tp,a.projectId,a.start,a,mode);log('Template "'+tp.name+'" added to "'+a.title+'"');toast(made.length+' steps added '+({after:'after',before:'before',none:'independent of'}[mode]||'next to')+' this task.');commit()},
+ tpledit:function(e){if(!isPM())return;S.ui.tpledit=e.dataset.id||null;S.ui.tpl=null;S.ui.tpldel=null;save();renderBody()},
+ tplnew:function(){if(!isPM())return;var t={id:uid('tp'),name:'New template',desc:'',tasks:[{t:'Step 1',d:1,est:1}]};S.templates.push(t);S.ui.tpledit=t.id;S.ui.tpl=null;save();renderBody()},
+ tpldup:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;var c=JSON.parse(JSON.stringify(t));c.id=uid('tp');c.name=(t.name+' (copy)').slice(0,120);S.templates.push(c);S.ui.tpledit=c.id;save();renderBody()},
+ tpldel:function(e){if(!isPM())return;S.ui.tpldel=e.dataset.id;renderBody()},
+ tpldel2:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;S.templates=S.templates.filter(function(x){return x.id!==t.id});S.ui.tpldel=null;if(S.ui.tpledit===t.id)S.ui.tpledit=null;log('Template "'+t.name+'" deleted');save();renderBody()},
+ tplstepadd:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;if(t.tasks.length>=60){toast('A template can have at most 60 steps.');return}t.tasks.push({t:'Step '+(t.tasks.length+1),d:1,est:1});save();renderBody()},
+ tplstepdel:function(e){var t=TP(e.dataset.id),j=+e.dataset.i;if(!t||!isPM())return;if(t.tasks.length<=1){toast('A template needs at least one step.');return}
+  t.tasks.splice(j,1);t.tasks.forEach(function(x){if(x.after){x.after=x.after.filter(function(k){return k!==j}).map(function(k){return k>j?k-1:k});if(!x.after.length)delete x.after}});save();renderBody()},
  bulk:function(){var pid=$('#bk-p').value;if(!pid){toast('Create a project first.');return}var lines=$('#bk-t').value.split('\n').map(function(l){return l.trim()}).filter(Boolean);if(!lines.length){toast('Write at least one line.');return}
   lines.forEach(function(l){var as=/@(\S+)/.exec(l),d=/#(\d+)/.exec(l),h=/~(\d+(?:[.,]\d+)?)h/.exec(l),u=as&&S.users.find(function(x){return x.name.toLowerCase().indexOf(as[1].toLowerCase())>=0});
    var s=normWD(TODAY()),t=newTask({projectId:pid,title:l.replace(/[@#~]\S+/g,'').replace(/\s+/g,' ').trim()||l,assignee:u?u.id:null,start:s,due:addWD(s,Math.max((d?parseInt(d[1],10):2)-1,0)),est:h?parseFloat(h[1].replace(',','.')):0})});
@@ -1140,6 +1191,14 @@ var A={
  copyjson:function(){download(JSON.stringify(S),'JSON backup')}
 };
 var H={
+ tpf:function(e){var t=TP(e.dataset.id),f=e.dataset.f;if(!t||!isPM()||(f!=='name'&&f!=='desc'))return;t[f]=e.value.trim().slice(0,f==='name'?120:500);if(!t.name)t.name='Template';save();renderBody()},
+ tps:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;var i=+e.dataset.i,x=t.tasks[i],f=e.dataset.f,v=e.value;if(!x)return;
+  if(f==='t')x.t=v.trim().slice(0,300)||('Step '+(i+1));
+  else if(f==='d')x.d=Math.min(60,Math.max(1,Math.round(parseFloat(v)||1)));
+  else if(f==='est')x.est=Math.max(0,parseFloat(v)||0);
+  else if(f==='tool'){if(v)x.tool=v;else delete x.tool}
+  else if(f==='after'){var a=[];v.split(/[,\s]+/).forEach(function(n){n=Math.round(parseFloat(n));if(n>=1&&n<=i&&a.indexOf(n-1)<0)a.push(n-1)});if(a.length)x.after=a;else delete x.after}
+  save();renderBody()},
  fro:function(e){openFolderRO(Array.prototype.slice.call(e.files));e.value=''},
  fup:function(e){uploadFiles(e.files,e.dataset.task,'');e.value=''},
  fupg:function(e){var tk=S.ui.ftk,pj=S.ui.fpj;uploadFiles(e.files,tk,tk?'':pj);e.value=''},

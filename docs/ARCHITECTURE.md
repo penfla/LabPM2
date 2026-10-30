@@ -23,7 +23,7 @@ Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:s
 | `POST /api/accounts` | Admin | `{username,password≥10,name,role,cap}` |
 | `GET /api/state` | any | `{state(v1 shape), revs, seq}` |
 | `GET /api/events` | any | SSE `change` events `{seq,user,kind,id,op,rev,data}`; replay with `Last-Event-ID` |
-| `POST /api/{kind}` · `GET/PUT/PATCH/DELETE /api/{kind}/{id}` | per matrix | `If-Match: <rev>` → 409 + `current`; PATCH without it merges per field |
+| `POST /api/{kind}` · `GET/PUT/PATCH/DELETE /api/{kind}/{id}` (kinds: users projects tasks fields rules goals docs templates files) | per matrix | `If-Match: <rev>` → 409 + `current`; PATCH without it merges per field |
 | `POST /api/files?name=&taskId=&projectId=` · `GET /api/files/{id}/download` | per matrix | raw body upload (≤ 25 MB), authenticated download; record via `GET/DELETE /api/files/{id}` |
 | `GET/POST /api/backups`, `POST /api/backups/restore` | Admin | list / create now / restore `{name}` (saves a pre-restore copy, revokes all sessions) |
 | `GET /api/audit` | Admin, PM | who/what/when |

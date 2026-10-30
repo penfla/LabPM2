@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var KINDS = ['users', 'projects', 'tasks', 'fields', 'rules', 'goals', 'docs', 'files'];
+var KINDS = ['users', 'projects', 'tasks', 'fields', 'rules', 'goals', 'docs', 'files', 'templates'];
 // task fields a Researcher may change on a task assigned to them
 var RESEARCHER_TASK_KEYS = ['status', 'notes', 'est', 'tags', 'cf', 'log', 'timer', 'ovFired', 'priority'];
 

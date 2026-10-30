@@ -29,6 +29,7 @@ function open(file, wal) {
     'CREATE TABLE IF NOT EXISTS sessions(sid TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);',
     'CREATE TABLE IF NOT EXISTS entities(kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, rev INTEGER NOT NULL, updated INTEGER NOT NULL, by TEXT, PRIMARY KEY(kind,id));',
     'CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, user TEXT, kind TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, rev INTEGER, data TEXT);',
+    'CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);',
     'CREATE INDEX IF NOT EXISTS ev_ts ON events(ts);'
   ].join('\n'));
   return db;

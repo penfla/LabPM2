@@ -25,6 +25,7 @@ var D = require('./db');
 var V = require('../shared/validate');
 var P = require('./perms');
 var L = require('../shared/logic');
+var TPL = require('../shared/templates');
 
 var sqlite = require('node:sqlite');
 var BAK_RE = /^labpm-(pre-restore-)?\d{8}-\d{4}\.sqlite$/;
@@ -78,6 +79,20 @@ function createApp(opts) {
       var line = 'id: ' + m.seq + '\nevent: change\ndata: ' + JSON.stringify(m) + '\n\n';
       clients.forEach(function (c) { c.res.write(line); });
     });
+  }
+
+  /* ---- built-in templates: seeded once per database, afterwards ordinary editable records ---- */
+  function seedTemplates(actor) {
+    if (db.prepare("SELECT 1 FROM meta WHERE key='templates_seeded'").get()) return [];
+    var evs = [];
+    TPL.DEFAULTS.forEach(function (t) {
+      var d = V.normalize('templates', t);
+      if (get('templates', d.id)) return;
+      q.putEnt.run('templates', d.id, JSON.stringify(d), 1, Date.now(), actor);
+      evs.push(emit(actor, 'templates', d.id, 'create', 1, d));
+    });
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES('templates_seeded','1')").run();
+    return evs;
   }
 
   /* ---- derived changes: cascade, automations, overdue (server-side, same transaction) ---- */
@@ -342,7 +357,7 @@ function createApp(opts) {
       if ((o[k] || []).length > 5000) throw err(400, k + ' exceeds 5000 items');
     });
     // users imported from a v1 file have no credentials: they are created as role-bearing records without login
-    var order = ['users', 'projects', 'fields', 'rules', 'goals', 'tasks', 'docs', 'files'];
+    var order = ['users', 'projects', 'fields', 'rules', 'goals', 'templates', 'tasks', 'docs', 'files'];
     order.forEach(function (k) {
       if (k === 'users' && !withUsers) return;
       (o[k] || []).forEach(function (raw) {
@@ -414,6 +429,10 @@ function createApp(opts) {
         db.exec('DELETE FROM entities; DELETE FROM accounts; DELETE FROM sessions;');
         src.prepare('SELECT kind,id,data,rev,updated,by FROM entities').all().forEach(function (r) { q.putEnt.run(r.kind, r.id, r.data, r.rev, r.updated, r.by); });
         src.prepare('SELECT id,username,hash,created FROM accounts').all().forEach(function (r) { q.addAcct.run(r.id, r.username, r.hash, r.created); });
+        var had = false;
+        try { had = !!src.prepare("SELECT 1 FROM meta WHERE key='templates_seeded'").get(); } catch (e) { /* backup from before templates existed */ }
+        db.prepare("DELETE FROM meta WHERE key='templates_seeded'").run();
+        if (had) db.prepare("INSERT INTO meta(key,value) VALUES('templates_seeded','1')").run(); else seedTemplates(user.id);
         emit(user.id, 'system', 'restore', 'restore', null, { from: name });
       });
     } finally { src.close(); }
@@ -455,6 +474,7 @@ function createApp(opts) {
       if (r && r.catch) r.catch(done);
     } catch (e) { done(e); }
   });
+  D.tx(db, function () { return seedTemplates('system'); });
   var sweepTimer = setInterval(sweep, opts.sweepMs || 60000); sweepTimer.unref();
   sweep();
   server.on('close', function () { clearInterval(sweepTimer); clients.forEach(function (c) { c.res.end(); }); try { db.close(); } catch (e) { /* closed */ } });

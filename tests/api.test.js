@@ -232,3 +232,52 @@ test('backups: create, list, restore (Admin only) reverts data, revokes sessions
   assert.ok(fs.readdirSync(bakDir).some(function (f) { return /pre-restore/.test(f); }));
   assert.ok((await req('GET', '/api/backups', undefined, again.c)).j.backups.length >= 2);
 });
+
+test('templates: seeded once, editable and deletable by Admin/PM only, validated, not revived after restart', async function () {
+  // the restore test above revoked every session: sign in again
+  pm = (await req('POST', '/api/login', { username: 'pmgr', password: 'password-pmgr-1' })).c;
+  res1 = (await req('POST', '/api/login', { username: 'res', password: 'password-res-1' })).c;
+  view = (await req('POST', '/api/login', { username: 'view', password: 'new-password-123' })).c;
+  var st = (await req('GET', '/api/state', undefined, pm)).j.state;
+  assert.strictEqual(st.templates.length, 5);
+  var dsc = st.templates.find(function (t) { return t.id === 'tpl-dsc'; });
+  assert.ok(dsc && dsc.tasks.length === 5 && dsc.tasks[2].after.length === 2);
+  var edited = Object.assign({}, dsc, { name: 'DSC (our SOP)', tasks: dsc.tasks.concat([{ t: 'QC review', d: 1, est: 1, after: [4] }]) });
+  assert.strictEqual((await req('PUT', '/api/templates/tpl-dsc', edited, res1)).s, 403);
+  assert.strictEqual((await req('PUT', '/api/templates/tpl-dsc', edited, view)).s, 403);
+  var ok = await req('PUT', '/api/templates/tpl-dsc', edited, pm);
+  assert.strictEqual(ok.s, 200); assert.strictEqual(ok.j.item.tasks.length, 6);
+  assert.strictEqual((await req('PUT', '/api/templates/tpl-dsc', Object.assign({}, edited, { tasks: [] }), pm)).s, 400);
+  // forward references and out-of-range indices are dropped
+  var odd = await req('POST', '/api/templates', { id: 'mine', name: 'Mine', desc: '', tasks: [{ t: 'A', d: 0, est: 1, after: [3] }, { t: 'B', d: 2, est: 1, after: [0, 0, 7] }] }, pm);
+  assert.strictEqual(odd.s, 201); assert.strictEqual(odd.j.item.tasks[0].after, undefined); assert.deepStrictEqual(odd.j.item.tasks[1].after, [0]); assert.strictEqual(odd.j.item.tasks[0].d, 1);
+  assert.strictEqual((await req('DELETE', '/api/templates/tpl-val', undefined, res1)).s, 403);
+  assert.strictEqual((await req('DELETE', '/api/templates/tpl-val', undefined, pm)).s, 200);
+  assert.strictEqual((await req('GET', '/api/templates/tpl-val', undefined, pm)).s, 404);
+});
+
+test('templates: a deleted built-in stays deleted after a server restart; an old backup without templates is re-seeded on restore', async function () {
+  var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'labpm-tpl-')), file = path.join(dir, 'db.sqlite');
+  var a1 = app.createApp({ dbPath: file, backupsDir: dir });
+  await new Promise(function (r) { a1.server.listen(0, '127.0.0.1', r); });
+  var b1 = 'http://127.0.0.1:' + a1.server.address().port;
+  var call = function (b, m, p, body, c) { return fetch(b + p, { method: m, headers: Object.assign({ 'content-type': 'application/json' }, c ? { cookie: c } : {}), body: body ? JSON.stringify(body) : undefined }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j, c: (r.headers.get('set-cookie') || '').split(';')[0] }; }); }); };
+  var adm = (await call(b1, 'POST', '/api/setup', { username: 'root1', password: 'long-password-1', name: 'R' })).c;
+  assert.strictEqual((await call(b1, 'GET', '/api/state', null, adm)).j.state.templates.length, 5);
+  await call(b1, 'DELETE', '/api/templates/tpl-cal', null, adm);
+  a1.server.close(); await new Promise(function (r) { setTimeout(r, 100); });
+  var a2 = app.createApp({ dbPath: file, backupsDir: dir });
+  await new Promise(function (r) { a2.server.listen(0, '127.0.0.1', r); });
+  var b2 = 'http://127.0.0.1:' + a2.server.address().port;
+  var adm2 = (await call(b2, 'POST', '/api/login', { username: 'root1', password: 'long-password-1' })).c;
+  var ids = (await call(b2, 'GET', '/api/state', null, adm2)).j.state.templates.map(function (t) { return t.id; });
+  assert.strictEqual(ids.length, 4); assert.ok(ids.indexOf('tpl-cal') < 0);
+  // a backup made before templates existed (no flag, no rows) restores with the defaults seeded again
+  var old = path.join(dir, 'labpm-20200101-0000.sqlite'), sq = require('node:sqlite'), od = new sq.DatabaseSync(old);
+  a2.db.exec("VACUUM INTO '" + old + ".tmp'"); od.close(); fs.rmSync(old, { force: true });
+  var tmp = new sq.DatabaseSync(old + '.tmp'); tmp.exec("DELETE FROM entities WHERE kind='templates'; DROP TABLE meta;"); tmp.close(); fs.renameSync(old + '.tmp', old);
+  assert.strictEqual((await call(b2, 'POST', '/api/backups/restore', { name: 'labpm-20200101-0000.sqlite' }, adm2)).s, 200);
+  var adm3 = (await call(b2, 'POST', '/api/login', { username: 'root1', password: 'long-password-1' })).c;
+  assert.strictEqual((await call(b2, 'GET', '/api/state', null, adm3)).j.state.templates.length, 5);
+  a2.server.close();
+});

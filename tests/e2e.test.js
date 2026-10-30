@@ -63,6 +63,24 @@ test('two browsers (' + engine + '): login, live update, files, role enforcement
     await A.selectOption('select[data-ch=dr][data-f=status]', 'In progress');
     await B.waitForFunction(function () { return /In progress/.test(document.querySelector('#vb').innerText); }, null, { timeout: 5000 });
     await A.keyboard.press('Escape');
+    // Templates: built-ins are seeded; Admin edits one, adds its steps to a single task, deletes another
+    await A.click('[data-act=nav][data-v=templates]');
+    await A.waitForSelector('[data-act=tpledit]');
+    assert.strictEqual(await A.locator('[data-act=tpledit]').count(), 5);
+    await A.locator('[data-act=tpledit]').first().click();
+    await A.fill('input[data-f=t][data-i="0"]', 'Weigh 8-10 mg in Al pan');
+    await A.press('input[data-f=t][data-i="0"]', 'Tab');
+    await A.click('[data-act=tpledit][data-id=""]');
+    await A.click('[data-act=nav][data-v=tasks]'); await A.click('tr[data-id=t1]');
+    await A.selectOption('#dt-t', 'tpl-dsc'); await A.selectOption('#dt-m', 'after');
+    await A.click('[data-act=tpltask]');
+    await A.keyboard.press('Escape');
+    await B.click('[data-act=nav][data-v=tasks]');
+    await B.waitForSelector('text=Weigh 8-10 mg in Al pan', { timeout: 8000 });
+    await A.click('[data-act=nav][data-v=templates]');
+    await A.locator('[data-act=tpldel]').last().click(); await A.locator('[data-act=tpldel2]').click();
+    await A.waitForFunction(function () { return document.querySelectorAll('[data-act=tpledit]').length === 4; });
+    await A.click('[data-act=nav][data-v=tasks]');
     // A uploads a file from the Files page; B (Viewer) sees it and can download it
     await A.click('[data-act=nav][data-v=files]'); await B.click('[data-act=nav][data-v=files]');
     await A.setInputFiles('input[data-ch=fupg]', { name: 'dsc-report.txt', mimeType: 'text/plain', buffer: Buffer.from('Tm 165.2 C') });

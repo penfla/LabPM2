@@ -65,8 +65,16 @@ test('shared-folder mode: two tabs, no server (login-free identity, merge, files
     await A.click('[data-act=nav][data-v=tasks]'); await A.click('tr[data-id=t1]');
     await A.selectOption('select[data-ch=dr][data-f=status]', 'In progress');
     await B.waitForFunction(function () { return /In progress/.test(document.querySelector('#vb').innerText); }, null, { timeout: 15000 });
-    // A uploads a file, B downloads it
     await A.keyboard.press('Escape');
+    // built-in templates are seeded by the first Admin/PM; Admin deletes one and the other PC sees it
+    await A.click('[data-act=nav][data-v=templates]'); await B.click('[data-act=nav][data-v=templates]');
+    await A.waitForFunction(function () { return document.querySelectorAll('[data-act=tpledit]').length === 5; });
+    await B.waitForFunction(function () { return document.querySelectorAll('.wgrid > section').length === 5; }, null, { timeout: 15000 });
+    assert.strictEqual(await B.locator('[data-act=tpledit]').count(), 0); // Researcher: view only
+    await A.locator('[data-act=tpldel]').last().click(); await A.locator('[data-act=tpldel2]').click();
+    await B.waitForFunction(function () { return document.querySelectorAll('.wgrid > section').length === 4; }, null, { timeout: 15000 });
+    await B.click('[data-act=nav][data-v=tasks]');
+    // A uploads a file, B downloads it
     await A.click('[data-act=nav][data-v=files]'); await B.click('[data-act=nav][data-v=files]');
     await A.setInputFiles('input[data-ch=fupg]', { name: 'dsc-report.txt', mimeType: 'text/plain', buffer: Buffer.from('Tm 165.2 C') });
     await B.waitForSelector('text=dsc-report.txt', { timeout: 15000 });

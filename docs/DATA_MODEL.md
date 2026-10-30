@@ -9,7 +9,7 @@ Session object (`localStorage['labpm_v1']`, snapshot entries in `labpm_snaps_v1`
 | `v` | `1` | Required; other values rejected |
 | `me` | id | Current user; falls back to first user |
 | `files` | attachment records | Optional (older sessions: `[]`); ≤ 5000 |
-| `users` `projects` `tasks` `fields` `rules` `goals` `docs` | arrays | ≤ 5000 items each; every item needs `id` matching `^[A-Za-z0-9_-]{1,40}$` |
+| `users` `projects` `tasks` `fields` `rules` `goals` `docs` `templates` | arrays | ≤ 5000 items each; every item needs `id` matching `^[A-Za-z0-9_-]{1,40}$` |
 | `activity` | `{t:number,u:id,m:string}[]` | ≤ 300 (newest first) |
 | `ui` | object | View, filters, theme, widgets… (drawer and confirmation flags reset on load) |
 | `demo` | boolean | Marks seeded data |
@@ -52,6 +52,9 @@ Session object (`localStorage['labpm_v1']`, snapshot entries in `labpm_snaps_v1`
   "action":{"type":"create_task","value":"Archive residual samples"} }
 ```
 `trigger.type ∈ status_to | created | overdue`; `cond.type ∈ none | project | priority | tag`; `action.type ∈ notify | set_assignee | set_priority | set_status | add_tag | create_task`. Rules with unknown types are dropped.
+
+### template
+`{id, name, desc, tasks:[{t, d, est, tool?, after?}]}` — `t` step title; `d` working days (1–60); `est` hours; `tool` instrument name; `after` indices (0-based) of earlier steps. 1–60 steps; forward or duplicate references are dropped. The five built-in templates (ids `tpl-dsc`, `tpl-ext`, `tpl-film`, `tpl-cal`, `tpl-val`) are seeded once per database (server: `meta.templates_seeded`; shared folder: an id with any history is never re-created). Session files without `templates` import normally.
 
 ### file (attachment record)
 `{id, taskId, projectId, name, path, size, type, added, by}` — `path` is relative to the backup folder (`attachments/<owner-folder>/<name>`); `taskId` empty = project-level; `added` epoch ms; `by` user id. The binary lives only in the folder, never in the JSON.

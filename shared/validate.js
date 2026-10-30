@@ -70,6 +70,18 @@ var N = {
   },
   goals: function (o) { return { id: o.id, name: str(o.name, 160), target: isDate(o.target) ? o.target : '', pids: Array.isArray(o.pids) ? o.pids.filter(idOrNull) : [] }; },
   docs: function (o) { return { id: o.id, title: str(o.title, 200), body: str(o.body, 200000), projectId: idOrNull(o.projectId), taskId: idOrNull(o.taskId), updated: isFinite(+o.updated) ? +o.updated : Date.now() }; },
+  templates: function (o) {
+    var steps = Array.isArray(o.tasks) ? o.tasks.slice(0, 60) : [];
+    if (!steps.length) bad('a template needs at least one step');
+    return { id: o.id, name: str(o.name, 120) || 'Template', desc: str(o.desc, 500), tasks: steps.map(function (x, i) {
+      x = x && typeof x === 'object' ? x : {};
+      var after = Array.isArray(x.after) ? x.after.filter(function (k, j, a) { return Number.isInteger(k) && k >= 0 && k < i && a.indexOf(k) === j; }) : [];
+      var s = { t: str(x.t, 300) || 'Step ' + (i + 1), d: Math.min(60, Math.max(1, Math.round(num(x.d, 1)))), est: num(x.est, 0) };
+      var tool = str(x.tool, 40); if (tool) s.tool = tool;
+      if (after.length) s.after = after;
+      return s;
+    }) };
+  },
   files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
 };
 
