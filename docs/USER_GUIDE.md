@@ -192,7 +192,8 @@ If no LabPM server answers, the page asks for the shared folder (README, option 
 - Date cascade, automations and the overdue check run in your browser. The first PC to notice an overdue task fires its rule.
 - Files are copied to `attachments/` in the folder; backups are daily JSON copies in `backups/` (Data & sync → Backups, Admin; restore replaces all records).
 - Import / export work on JSON files as in server mode; there is no audit page.
-- Needs Chrome or Edge; after a browser restart use *Reconnect folder*.
+- Editing needs Chrome or Edge; after a browser restart use *Reconnect folder*.
+- **Firefox and Safari:** *Open folder read-only…* shows projects, tasks, documents and files as they were when you opened the folder (everything is view-only, whatever your role; *Reload folder* in Data & sync re-reads it). Creating the first Admin or adding people needs Chrome/Edge or the server. With the LabPM server all browsers can edit.
 
 ## 12. Keyboard and accessibility
 

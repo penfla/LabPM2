@@ -6,7 +6,7 @@ Multi-user project, task and request manager for chemical/polymer laboratories. 
 
 | | A. HTML only, shared folder | B. Server |
 |---|---|---|
-| Install | none: copy `public/index.html` anywhere and open it in Chrome or Edge | Node.js ≥ 22.13 on one PC/server (IT approval once) |
+| Install | none: copy `public/index.html` anywhere and open it in a browser | Node.js ≥ 22.13 on one PC/server (IT approval once) |
 | Users | pick their name (no passwords) | real accounts, roles enforced by the server |
 | Data | files in a shared network folder | `labpm.sqlite` in the data folder |
 | Updates seen by others | every ~4 s | immediately |
@@ -16,11 +16,20 @@ Multi-user project, task and request manager for chemical/polymer laboratories. 
 The page detects the mode: if the LabPM server answers it uses the server, otherwise it asks for the shared folder.
 
 ### A. HTML only (no install, no admin rights)
-1. Put `index.html` on the network drive (or open it from your PC) and open it in **Chrome or Edge** as a file (`file:///…` or a mapped drive) or from an https address.
+1. Put `index.html` on the network drive (or open it from your PC) and open it in **Chrome or Edge** (read/write; see the browser table below) as a file (`file:///…` or a mapped drive) or from an https address.
 2. Click *Select folder…* and choose the shared LabPM folder (create an empty one; everyone selects the same folder). The browser asks once for read/write permission, and again after a restart (*Reconnect folder*).
 3. First PC: create the Admin (your name). Others: choose their name or *I am new here*.
 
-The folder gets `log/` (one log file per PC), `attachments/`, `backups/` (daily JSON copy, last 14) and `meta.json`. Limits: Chrome/Edge only; no real access control (anyone with the folder can read and edit everything); latency ~4 s; two people changing the *same field* of the same record within seconds: the later one wins; do not edit the files by hand. Details: `docs/ARCHITECTURE.md`, `SECURITY.md`.
+The folder gets `log/` (one log file per PC), `attachments/`, `backups/` (daily JSON copy, last 14) and `meta.json`. Limits: editing needs Chrome or Edge; no real access control (anyone with the folder can read and edit everything); latency ~4 s; two people changing the *same field* of the same record within seconds: the later one wins; do not edit the files by hand. Details: `docs/ARCHITECTURE.md`, `SECURITY.md`.
+
+### Browsers
+
+| Mode | Chrome / Edge | Firefox | Safari |
+|---|---|---|---|
+| B. Server (any address your IT gives you) | full | full | full |
+| A. Shared folder | read / write | **read-only** | **read-only** |
+
+Firefox and Safari cannot write to a folder chosen by the user (no File System Access API). In shared-folder mode they open the folder read-only (*Open folder read-only…*): you see the state at the time you opened it, files can be downloaded, nothing can be edited, and you reload the folder to see newer changes. People who need to edit from Firefox or Safari should use the server (B). Server mode uses only standard web APIs; it is covered by an automated test on Chromium and, in CI, on Firefox and WebKit (Safari's engine) — not yet verified on real Safari or Firefox by the author.
 
 ### B. Server (login, roles, instant updates)
 1. Install Node.js ≥ 22.13 (https://nodejs.org) on one PC or server that stays on.

@@ -25,12 +25,17 @@ try { pw = require('playwright'); } catch (e) { pw = null; }
 
 var T = { id: 't1', projectId: 'p1', title: 'DSC run PP-04', status: 'To do', priority: 'Medium', assignee: null, start: '2026-11-02', due: '2026-11-03', est: 4, deps: [], tags: [], cf: {}, notes: '', log: [] };
 
-test('two browsers: login, live update, role enforcement', { skip: !pw && 'playwright not installed', timeout: 120000 }, async function () {
+function installed(name) {
+  try { return !!pw && require('node:fs').existsSync(pw[name].executablePath()); } catch (e) { return false; }
+}
+// server mode uses only standard web APIs: run the same scenario on every engine that is installed
+['chromium', 'firefox', 'webkit'].forEach(function (engine) {
+test('two browsers (' + engine + '): login, live update, files, role enforcement', { skip: !installed(engine) && engine + ' not installed (npx playwright install ' + engine + ')', timeout: 120000 }, async function () {
   var attDir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'labpm-e2e-'));
   var a = app.createApp({ dbPath: ':memory:', attachmentsDir: attDir, backupsDir: attDir }), srv = a.server;
   await new Promise(function (r) { srv.listen(0, '127.0.0.1', r); });
   var base = 'http://127.0.0.1:' + srv.address().port;
-  var browser = await pw.chromium.launch();
+  var browser = await pw[engine].launch();
   try {
     var A = await (await browser.newContext()).newPage(), B = await (await browser.newContext()).newPage();
     var errs = []; [A, B].forEach(function (p) { p.on('pageerror', function (e) { errs.push(e.message); }); });
@@ -73,4 +78,5 @@ test('two browsers: login, live update, role enforcement', { skip: !pw && 'playw
     assert.strictEqual(s, 403);
     assert.deepStrictEqual(errs, []);
   } finally { await browser.close(); srv.close(); }
+});
 });

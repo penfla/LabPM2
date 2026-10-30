@@ -47,7 +47,7 @@ Researcher on own tasks may change: `status notes est tags cf log timer priority
 | Backups | daily JSON copy by the first PC of the day (14 kept); restore = full write over current records |
 | Test hook | `#opfs=<name>` in the URL uses the browser's private file system instead of a picker (used by the Playwright test) |
 
-Limits: Chromium only; ~4 s latency; whole-array fields (`log`, `tags`, `deps`) are last-writer-wins, so two people logging hours on the same task within seconds can lose one entry; a record deleted on one PC disappears everywhere; dead devices' log files are never pruned; not tested on real SMB shares (the test uses OPFS as the shared folder).
+Limits: read/write needs Chromium (File System Access API); Firefox/Safari get a read-only snapshot via `<input webkitdirectory>` (`openFolderRO`, role forced to Viewer, no polling, reload by re-selecting the folder; tested by simulating the missing API in Chromium); ~4 s latency; whole-array fields (`log`, `tags`, `deps`) are last-writer-wins, so two people logging hours on the same task within seconds can lose one entry; a record deleted on one PC disappears everywhere; dead devices' log files are never pruned; not tested on real SMB shares (the test uses OPFS as the shared folder).
 
 ## Roadmap
 1. ✅ server, auth, RBAC, rev/409, SSE, import/export, tests

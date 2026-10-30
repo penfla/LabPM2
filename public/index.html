@@ -475,7 +475,7 @@ function api(method,path,body,rev){var h={'X-Client-Id':CID};if(body!==undefined
   return fetch(path,{method:method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {s:r.status,j:j}})})}
 function uiKey(){return 'labpm2_ui_'+(ME?ME.id:'')}
 function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null})}catch(e){}return defaultUI()}
-function savedText(){var m={boot:'Connecting…',ok:(MODE==='folder'?'Shared folder · ':'')+(SY.last?'synced '+hhmm(SY.last):'synced'),sync:'Syncing…',off:'Offline: retrying, changes kept in this page',err:SY.msg||'Sync error'};return m[SY.st]||''}
+function savedText(){var t=SY.last?hhmm(SY.last):'',m={boot:'Connecting…',ok:MODE==='folder'?(FB.ro?'Read-only · folder loaded '+t:'Shared folder · synced '+t):'Synced '+t,sync:'Syncing…',off:'Offline: retrying, changes kept in this page',err:SY.msg||'Sync error'};return m[SY.st]||''}
 function hhmm(ts){return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function svStatus(st,msg){SY.st=st;SY.msg=msg||'';var el=document.getElementById('sv');if(el)el.textContent=savedText()}
 function key(k,id){return k+'/'+id}
@@ -533,7 +533,7 @@ function serverBoot(){api('GET','/api/me').then(function(r){if(r.s===200){ME=r.j
 function boot(){if(location.protocol==='file:'){folderBoot();return}
   fetch('/api/status',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j&&j.version){MODE='server';serverBoot()}else folderBoot()}).catch(folderBoot)}
 /* ---------- shared-folder mode (no server): per-device operation logs, merged by shared/fold.js ---------- */
-var FB={h:null,logs:null,att:null,bak:null,dev:'',id:'',fold:null,files:{},q:Promise.resolve(),pending:[],poll:null,booted:false,polling:false};
+var FB={ro:false,snapAtt:{},h:null,logs:null,att:null,bak:null,dev:'',id:'',fold:null,files:{},q:Promise.resolve(),pending:[],poll:null,booted:false,polling:false};
 function idb(mode,fn){return new Promise(function(res,rej){var r=indexedDB.open('labpm_folder',1);r.onupgradeneeded=function(){r.result.createObjectStore('kv')};r.onerror=function(){rej(r.error)};r.onsuccess=function(){var db=r.result,tx=db.transaction('kv',mode),q=fn(tx.objectStore('kv'));tx.oncomplete=function(){res(q&&q.result)};tx.onerror=function(){rej(tx.error)}}})}
 function devId(){return new Promise(function(res){var id=null;try{id=localStorage.getItem('labpm_dev');if(!id){id=uid('d');localStorage.setItem('labpm_dev',id)}}catch(e){id=uid('d')}
   if(!navigator.locks){res(id);return}
@@ -543,10 +543,21 @@ function foldGate(msg,btn,act){$('#app').innerHTML='<div class="app" id="auth" s
 function folderBoot(){MODE='folder';
   var t=location.hash.match(/^#opfs=([\w-]+)$/);
   if(t&&navigator.storage&&navigator.storage.getDirectory){navigator.storage.getDirectory().then(function(r){return r.getDirectoryHandle(t[1],{create:true})}).then(openFolder).catch(folderFail);return}
-  if(typeof window.showDirectoryPicker!=='function'){foldGate('This browser cannot open a shared folder. Use Chrome or Edge, or ask your IT to run the LabPM server (README).');return}
+  if(typeof window.showDirectoryPicker!=='function'){foldGateRO();return}
   idb('readonly',function(st){return st.get('dir')}).then(function(h){
     if(!h){foldGate('Select the shared LabPM folder.','Select folder…','fchoose');return}
     return h.queryPermission({mode:'readwrite'}).then(function(p){if(p==='granted')return openFolder(h);FB.pending_h=h;foldGate('Folder "'+h.name+'" needs your permission again.','Reconnect folder','freconnect')})}).catch(folderFail)}
+function foldGateRO(){var ok='webkitdirectory' in document.createElement('input');
+  $('#app').innerHTML='<div class="app" id="auth" style="display:grid;place-items:center;min-height:80vh"><section class="card" style="max-width:480px;width:100%"><h2>LabPM — shared folder (read-only)</h2><p>This browser (Firefox, Safari…) cannot write to a shared folder. You can open the folder <b>read-only</b> to view projects, tasks and files. To edit, use Chrome or Edge, or open the address of the LabPM server (ask your IT) in this browser.</p>'+(ok?'<label class="btn pri">Open folder read-only…<input type="file" webkitdirectory multiple hidden data-ch="fro"></label>':'<p class="small muted">This browser cannot open folders at all.</p>')+'<p class="small muted" style="margin-top:12px">Select the shared LabPM folder (the one that contains <span class="mono">log/</span>). Nothing is uploaded: files are read in your browser. Changes made by others show after you reload the folder.</p></section></div>'}
+async function openFolderRO(list){var logs=[],att={},meta=null,root='',prev=ME&&ME.id;
+  list.forEach(function(f){var p=(f.webkitRelativePath||f.name).split('/'),rest=p.slice(1);if(!root)root=p[0];
+    if(rest.length===2&&rest[0]==='log'&&/\.jsonl$/.test(rest[1]))logs.push(f);else if(rest.length===2&&rest[0]==='attachments')att[rest[1]]=f;else if(rest.length===1&&rest[0]==='meta.json')meta=f});
+  if(!logs.length&&!meta){toast('That folder does not look like a LabPM folder (it has no log/ inside).');if(!prev)foldGateRO();return}
+  FB.ro=true;FB.h={name:root||'folder'};FB.snapAtt=att;FB.dev='ro';FB.pending=[];FB.id='ro';
+  try{if(meta)FB.id=JSON.parse(await meta.text()).id||'ro'}catch(e){}
+  FB.fold=new LabFold.Fold(LabValidate.normalize);
+  for(var i=0;i<logs.length;i++){LabFold.parseLog(await logs[i].text()).forEach(function(o){FB.fold.apply(o)})}
+  MODE='folder';S=foldState();if(prev&&Uu(prev)){try{localStorage.setItem('labpm_me_'+FB.id,prev)}catch(e){}}folderIdentity()}
 function folderFail(e){foldGate('Cannot open the folder: '+((e&&e.message)||e)+'.','Select folder…','fchoose')}
 async function openFolder(h){FB.h=h;FB.logs=await h.getDirectoryHandle('log',{create:true});FB.att=await h.getDirectoryHandle('attachments',{create:true});FB.bak=await h.getDirectoryHandle('backups',{create:true});
   try{FB.id=JSON.parse(await (await (await h.getFileHandle('meta.json')).getFile()).text()).id}catch(e){FB.id=uid('fo');var fh=await h.getFileHandle('meta.json',{create:true}),w=await fh.createWritable();await w.write(JSON.stringify({id:FB.id,created:Date.now(),app:'LabPM 2'}));await w.close()}
@@ -563,14 +574,15 @@ function foldState(){var st={v:1,me:'',users:[],projects:[],tasks:[],fields:[],r
   Object.keys(st).forEach(function(k){if(Array.isArray(st[k]))st[k].sort(function(a,b){return FB.fold.order(k,a.id)-FB.fold.order(k,b.id)})});return st}
 async function compactOwn(){try{var fh=await FB.logs.getFileHandle(FB.dev+'.jsonl'),f=await fh.getFile();if(f.size<1e6)return;
   var ops=FB.fold.compact(FB.dev),w=await fh.createWritable();await w.write(ops.map(function(o){return JSON.stringify(o)}).join('\n')+'\n');await w.close()}catch(e){/* no own log yet */}}
-function folderIdentity(){if(FB.poll){clearInterval(FB.poll);FB.poll=null}ME=null;var users=S.users,saved=null;try{saved=localStorage.getItem('labpm_me_'+FB.id)}catch(e){}
+function folderIdentity(){if(FB.poll){clearInterval(FB.poll);FB.poll=null}ME=null;var users=S.users,saved=null;
+  if(FB.ro&&!users.length){foldGate('This folder has no users yet. Create the first Admin with Chrome or Edge, or with the LabPM server, then reload the folder here.','Open another folder…','fgro');return}try{saved=localStorage.getItem('labpm_me_'+FB.id)}catch(e){}
   if(saved&&users.some(function(u){return u.id===saved})){enterFolder(saved);return}
-  var sel=users.length?'<label class="full">Who are you?<select name="user">'+opt(users.map(function(u){return [u.id,u.name+' · '+u.role]}).concat([['__new','I am new here…']]),users[0].id)+'</select></label>':'';
-  $('#app').innerHTML='<div class="app" id="auth" style="display:grid;place-items:center;min-height:80vh"><form class="card" style="max-width:380px;width:100%" data-form="fident"><h2>'+(users.length?'LabPM — who are you?':'Create the first Admin')+'</h2><div class="form">'+sel+'<label class="full">'+(users.length?'Your name (only if you are new)':'Your name')+'<input name="name" autocomplete="name"'+(users.length?'':' required')+'></label><label class="full"><button class="btn pri" type="submit">Continue</button></label></div><p class="small muted">Shared-folder mode has no passwords: roles organise the interface but are not access control (see SECURITY.md). Folder: '+esc(FB.h.name)+'</p></form></div>'}
+  var sel=users.length?'<label class="full">Who are you?<select name="user">'+opt(users.map(function(u){return [u.id,u.name+' · '+u.role]}).concat(FB.ro?[]:[['__new','I am new here…']]),users[0].id)+'</select></label>':'';
+  $('#app').innerHTML='<div class="app" id="auth" style="display:grid;place-items:center;min-height:80vh"><form class="card" style="max-width:380px;width:100%" data-form="fident"><h2>'+(users.length?'LabPM — who are you?':'Create the first Admin')+'</h2><div class="form">'+sel+''+(FB.ro?'':'<label class="full">'+(users.length?'Your name (only if you are new)':'Your name')+'<input name="name" autocomplete="name"'+(users.length?'':' required')+'></label>')+'<label class="full"><button class="btn pri" type="submit">Continue</button></label></div><p class="small muted">Shared-folder mode has no passwords: roles organise the interface but are not access control (see SECURITY.md). Folder: '+esc(FB.h.name)+(FB.ro?' (read-only in this browser)':'')+'</p></form></div>'}
 function folderSubmit(d){var uid0=d.user,u=null;if(!uid0||uid0==='__new'){var nm=(d.name||'').trim();if(!nm)return;u={id:uid('u'),name:nm.slice(0,120),role:S.users.length?'Researcher':'Admin',cap:40};S.users.push(u);uid0=u.id}
   try{localStorage.setItem('labpm_me_'+FB.id,uid0)}catch(e){}enterFolder(uid0);if(u){delete SHADOW[key('users',u.id)];syncSchedule()}}
 function enterFolder(id){ME=Uu(id);S.me=ME.id;S.ui=loadUi();if(NAVFLAT.every(function(n){return n[0]!==S.ui.view}))S.ui.view='dashboard';snapshotShadow();applyTheme();svStatus('ok');SY.last=Date.now();
-  render();renderDrawer();FB.poll=setInterval(pollFolder,4000);setTimeout(folderSweep,1500);folderBackup(false).catch(function(){})}
+  render();renderDrawer();if(FB.ro)return;FB.poll=setInterval(pollFolder,4000);setTimeout(folderSweep,1500);folderBackup(false).catch(function(){})}
 function pollFolder(){if(FB.polling||!FB.fold)return;FB.polling=true;
   readLogs().then(function(ch){FB.polling=false;if(SY.st==='off')svStatus('ok');SY.last=Date.now();var seen={};ch.forEach(function(c){seen[c[0]]=c[1]});
     Object.keys(seen).forEach(function(kk){var i=kk.indexOf('/'),k=kk.slice(0,i),id=kk.slice(i+1);if(COLS.indexOf(k)<0&&k!=='files')return;var d=FB.fold.get(k,id);
@@ -590,7 +602,7 @@ function folderSweep(){if(MODE!=='folder'||!S||!ME||role()==='Viewer')return;var
   Object.keys(eng.created).forEach(function(id){S.tasks.push(eng.byId[id])});eng.notices.forEach(function(n){toast(n.text)});if(Object.keys(eng.touched).length){syncSchedule();softRender()}}
 function mkOp(k,id,p,x,c){return {t:FB.fold.tick(),d:FB.dev,u:ME.id,k:k,id:id,p:p,x:x?1:undefined,c:c?1:undefined}}
 function emitOps(recs){var lines=recs.map(function(r){FB.fold.apply(r);return JSON.stringify(r)});return appendLog(lines)}
-function folderSync(){if(SY.busy){SY.dirty=true;return}runLocalLogic();var ops=diffOps();SY.dirty=false;
+function folderSync(){if(FB.ro)return;if(SY.busy){SY.dirty=true;return}runLocalLogic();var ops=diffOps();SY.dirty=false;
   if(!ops.length&&!FB.pending.length){if(SY.st!=='ok')svStatus('ok');return}
   SY.busy=true;svStatus('sync');var recs=[];
   ops.forEach(function(op){var kk=key(op.k,op.id);
@@ -633,7 +645,7 @@ var P=function(id){return S.projects.find(function(p){return p.id===id})};
 var Uu=function(id){return S.users.find(function(u){return u.id===id})};
 var uname=function(id){var u=Uu(id);return u?u.name:'—'};
 var me=function(){return Uu(S.me)||S.users[0]};
-var role=function(){return me().role};
+var role=function(){return (MODE==='folder'&&FB.ro)?'Viewer':me().role};
 var isAdmin=function(){return role()==='Admin'};
 var isPM=function(){return role()==='Admin'||role()==='Project manager'};
 var canEdit=function(t){return isPM()||(role()==='Researcher'&&t.assignee===S.me)};
@@ -912,7 +924,7 @@ function vInfo(){
    '<section class="card"><details class="lic"><summary>License text</summary><pre>POLYFORM NONCOMMERCIAL LICENSE 1.0.0\n\nCopyright (c) 2026 Flavio Pendolino\nAll rights reserved.\nCommercial use requires a separate license: penfla@me.com\n\n--- ACCEPTANCE ---\nIn order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.\n\n--- COPYRIGHT LICENSE ---\nThe licensor grants you a copyright license for the software to do everything you might do with the software that is not commercial use or a use closely related to commercial use, for any term of years.\n\n--- NONCOMMERCIAL PURPOSES ---\nNoncommercial purposes include personal use, educational use, and research use. Noncommercial purposes do not include any purpose primarily intended for or directed toward commercial advantage or monetary compensation, or any use by any legal entity primarily engaged in the business of providing goods or services of the kind provided by the software or a closely related kind.\n\n--- COVENANTS (Copyleft) ---\nYou may not allow any third party to benefit from the grants of this license without enforcing all terms of this license as conditions for those grants.\n\n--- NOTICES ---\nEnsure all copies of the software include all copyright, patent, trademark, and attribution notices from the source you received them.\n\n--- COMMERCIALIZATION ---\nYou may not commercialize the software, meaning you may not grant licenses to use the software or distribute the software for a fee, nor may you otherwise seek monetary compensation in connection with the software.\n\n--- NO LIABILITY ---\nAs far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.\n\nFull license text: https://polyformproject.org/licenses/noncommercial/1.0.0/</pre></details></section>'}
 
 /* ---------- session ---------- */
-function syncInfo(){if(MODE!=='folder')return 'All changes are written to the central server and appear in other open sessions within seconds. Roles are enforced by the server.';
+function syncInfo(){if(MODE==='folder'&&FB.ro)return 'Read-only view of folder <b>'+esc(FB.h.name)+'</b> (this browser cannot write to a shared folder). You see the state at the time you opened it. <label class="btn sm">Reload folder<input type="file" webkitdirectory multiple hidden data-ch="fro"></label> To edit, use Chrome or Edge, or the LabPM server address.';if(MODE!=='folder')return 'All changes are written to the central server and appear in other open sessions within seconds. Roles are enforced by the server.';
   return 'Shared-folder mode (no server): folder <b>'+esc(FB.h.name)+'</b>. Every PC writes only its own log file in <span class="mono">log/</span> and reads the others every few seconds. <b>Roles are not access control in this mode</b>: anyone with the folder can read and change everything. <button class="btn sm" data-act="fchange">Change folder</button>'}
 function acctCard(){if(MODE==='folder')return '<section class="card"><h2>Identity</h2><p style="margin:0 0 8px">You are <b>'+esc(me().name)+'</b> ('+esc(me().role)+'). There are no passwords in shared-folder mode.</p><button class="btn" data-act="logout">Switch user</button></section>';
   return '<section class="card"><h2>Account</h2><p style="margin:0 0 8px">Signed in as <b>'+esc(me().name)+'</b> ('+esc(me().role)+')</p><div class="form"><label>Current password<input type="password" id="pw-c" autocomplete="current-password"></label><label>New password (10+ characters)<input type="password" id="pw-n" autocomplete="new-password"></label><label class="full"><button class="btn" data-act="chpw" style="width:max-content">Change password</button></label></div></section>'}
@@ -1111,10 +1123,11 @@ var A={
  fielddel:function(e){S.fields=S.fields.filter(function(f){return f.id!==e.dataset.id});save();renderBody()},
  useradd:function(){if(MODE==='folder'){var nm=$('#nu-n').value.trim();if(!nm){toast('Enter the name.');return}S.users.push({id:uid('u'),name:nm,role:$('#nu-r').value,cap:40});save();renderBody();return}var n=$('#nu-n').value.trim(),un=$('#nu-u').value.trim(),pw=$('#nu-p').value;if(!n||!un){toast('Enter name and username.');return}api('POST','/api/accounts',{username:un,name:n,password:pw,role:$('#nu-r').value,cap:40}).then(function(r){if(r.s===201){S.users.push(r.j.user);REV['users/'+r.j.user.id]=1;SHADOW['users/'+r.j.user.id]=JSON.stringify(r.j.user);toast('Account created.');renderBody()}else toast(r.j.error||'Error '+r.s)})},
  userpw:function(e){var pw=prompt('New password for '+uname(e.dataset.id)+' (10+ characters):');if(!pw)return;api('POST','/api/accounts/'+e.dataset.id+'/password',{password:pw}).then(function(r){toast(r.s===200?'Password changed; the user was signed out.':(r.j.error||'Error'))})},
+ fgro:function(){foldGateRO()},
  fchoose:function(){window.showDirectoryPicker({mode:'readwrite',id:'labpm'}).then(function(h){return openFolder(h)}).catch(function(er){if(!er||er.name!=='AbortError')folderFail(er)})},
  freconnect:function(){var h=FB.pending_h;h.requestPermission({mode:'readwrite'}).then(function(p){if(p==='granted')return openFolder(h);toast('Permission not granted.')}).catch(folderFail)},
  fchange:function(){window.showDirectoryPicker({mode:'readwrite',id:'labpm'}).then(function(h){return idb('readwrite',function(st){return st.put(h,'dir')})}).then(function(){location.reload()}).catch(function(){})},
- fdl:function(e,ev){if(ev)ev.preventDefault();var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;FB.att.getFileHandle(f.id).then(function(h){return h.getFile()}).then(function(file){dl(file,f.name)},function(){toast('File not found in the shared folder.')})},
+ fdl:function(e,ev){if(ev)ev.preventDefault();var f=S.files.find(function(x){return x.id===e.dataset.id});if(!f)return;(FB.ro?(FB.snapAtt[f.id]?Promise.resolve(FB.snapAtt[f.id]):Promise.reject()):FB.att.getFileHandle(f.id).then(function(h){return h.getFile()})).then(function(file){dl(file,f.name)},function(){toast('File not found in the shared folder.')})},
  logout:function(){if(MODE==='folder'){try{localStorage.removeItem('labpm_me_'+FB.id)}catch(e){}folderIdentity();return}api('POST','/api/logout',{}).then(function(){showLogin()})},
  chpw:function(){api('POST','/api/password',{current:$('#pw-c').value,password:$('#pw-n').value}).then(function(r){toast(r.s===200?'Password changed.':(r.j.error||'Error'));if(r.s===200){$('#pw-c').value='';$('#pw-n').value=''}})},
  exportdb:function(){if(!isAdmin())return;if(MODE==='folder'){dl(new Blob([JSON.stringify(exportObj(),null,1)],{type:'application/json'}),'labpm-database-'+TODAY()+'.json');toast('Database exported.');return}api('GET','/api/export').then(function(r){if(r.s!==200){toast(r.j.error||'Error');return}dl(new Blob([JSON.stringify(r.j,null,1)],{type:'application/json'}),'labpm-database-'+TODAY()+'.json');toast('Database exported.')})},
@@ -1124,6 +1137,7 @@ var A={
  copyjson:function(){download(JSON.stringify(S),'JSON backup')}
 };
 var H={
+ fro:function(e){openFolderRO(Array.prototype.slice.call(e.files));e.value=''},
  fup:function(e){uploadFiles(e.files,e.dataset.task,'');e.value=''},
  fupg:function(e){var tk=S.ui.ftk,pj=S.ui.fpj;uploadFiles(e.files,tk,tk?'':pj);e.value=''},
  fpj:function(e){S.ui.fpj=e.value;S.ui.ftk='';save();renderBody()},ftk:function(e){S.ui.ftk=e.value;save();renderBody()},

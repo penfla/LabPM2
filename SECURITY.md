@@ -26,7 +26,7 @@ Everything above about accounts, roles, CSRF and the audit trail applies to **se
 - **No authentication or authorisation.** Anyone who can read the folder can read all data; anyone who can write to it can change or delete anything, whatever role the interface shows. Protect the folder with share/NTFS permissions and treat the roles as a way to organise the interface.
 - No transport encryption beyond what the file share provides; no encryption at rest; attachments are plain files in `attachments/`.
 - The log files are plain JSON lines (`log/<device>.jsonl`) and contain every value ever written that is still current, including the user id of the author. They are not tamper-evident.
-- The page needs a secure context and the File System Access API (Chrome/Edge). It only touches the folder you selected, with the browser's own permission prompt; the folder handle is kept in IndexedDB.
+- Editing needs a secure context and the File System Access API (Chrome/Edge). Firefox and Safari open the folder read-only through the standard directory input (files are read locally, nothing is uploaded). It only touches the folder you selected, with the browser's own permission prompt; the folder handle is kept in IndexedDB.
 - Page code is the same and keeps the same CSP; there are no network calls (`connect-src 'self'`; the only request is the probe for the server).
 
 ## What it is not
