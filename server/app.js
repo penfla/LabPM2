@@ -1,12 +1,12 @@
 /*
- * License-Identifier: PolyForm-Noncommercial-1.0.0
+ * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 Flavio Pendolino
- * https://polyformproject.org/licenses/noncommercial/1.0.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.2
- * License: PolyForm Noncommercial 1.0.0
- * Commercial use: penfla@me.com
+ * Version: 2.0.0-beta.3
+ * License: Apache License 2.0
+ * Commercial use: permitted under the Apache License 2.0
  * Purpose: HTTP API (auth, CRUD with RBAC, SSE change feed, import/export, audit) and static client
  * Method: node:http; cookie sessions; per-record rev (If-Match -> 409); one SQLite transaction per mutation; events table = audit + replay feed
  * Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
@@ -14,7 +14,7 @@
  * Scientific references: n/a
  * AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
  *
- * (c) 2026 Flavio Pendolino | PolyForm Noncommercial 1.0.0
+ * (c) 2026 Flavio Pendolino | Apache License 2.0
  */
 'use strict';
 var http = require('node:http');
@@ -249,7 +249,7 @@ function createApp(opts) {
     req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
-    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.2' });
+    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.3' });
 
     if (p === '/api/setup' && m === 'POST') return body(req).then(function (b) {
       var out = D.tx(db, function () { if (q.acctCount.get().n) throw err(409, 'already initialised'); return newAccount(b, 'Admin'); });

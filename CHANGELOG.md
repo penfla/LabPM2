@@ -1,6 +1,7 @@
 # Changelog
 
-## 2.0.0-beta.2 (unreleased)
+## 2.0.0-beta.3 (unreleased)
+- **License: Apache License 2.0** (was PolyForm Noncommercial 1.0.0) for code and documentation of this repository, including commercial use. `LICENSE` is the Apache-2.0 text, `NOTICE` carries the attribution; file headers use `SPDX-License-Identifier: Apache-2.0`; contributions are accepted under the same terms. LabPM 1.3 (https://github.com/penfla/LabPM) is unaffected.
 - New: **shared-folder mode**: the same `index.html` runs without any server on a shared network folder (Chrome/Edge): per-device operation logs merged per field (`shared/fold.js`), name-based identity, attachments, daily backups, import/export. Mode is detected automatically.
 - New: Firefox and Safari: server mode works in any browser; shared-folder mode opens read-only there (no File System Access API). Browser e2e test now runs on Chromium, Firefox and WebKit when installed (CI installs all three).
 - Fix: shared-folder mode re-checks an apparently empty folder (up to ~3 s) before offering to create the first Admin, and warns to reload if colleagues already use the folder (stale directory listings on network shares).
@@ -21,4 +22,4 @@
 - Client derived from LabPM v1.3.0 (https://github.com/penfla/LabPM); this repository is self-contained.
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

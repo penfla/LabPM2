@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /*
- * License-Identifier: PolyForm-Noncommercial-1.0.0
+ * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 Flavio Pendolino
- * https://polyformproject.org/licenses/noncommercial/1.0.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.2
- * License: PolyForm Noncommercial 1.0.0
- * Commercial use: penfla@me.com
+ * Version: 2.0.0-beta.3
+ * License: Apache License 2.0
+ * Commercial use: permitted under the Apache License 2.0
  * Purpose: Inline shared/*.js into public/index.html so the page stays a single self-contained file
  * Method: replaces the block between the INLINE markers; --check exits 1 when the page is out of date
  * Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
@@ -15,7 +15,7 @@
  * Scientific references: n/a
  * AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
  *
- * (c) 2026 Flavio Pendolino | PolyForm Noncommercial 1.0.0
+ * (c) 2026 Flavio Pendolino | Apache License 2.0
  */
 'use strict';
 var fs = require('node:fs');

@@ -1,6 +1,6 @@
 # LabPM 2
 
-Multi-user project, task and request manager for chemical/polymer laboratories. Server: Node ≥ 22.13 + SQLite. Status: **2.0.0-beta.2**. Self-contained repository; client derived from LabPM v1.3 (https://github.com/penfla/LabPM).
+Multi-user project, task and request manager for chemical/polymer laboratories. Server: Node ≥ 22.13 + SQLite. Status: **2.0.0-beta.3**. Self-contained repository; client derived from LabPM v1.3 (https://github.com/penfla/LabPM).
 
 ## Two ways to run it (same `index.html`)
 
@@ -46,8 +46,8 @@ npm run inline          # after editing shared/*.js: re-embed them in public/ind
 
  Details: `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/MIGRATION.md` (from v1.3), `SECURITY.md`, `CHANGELOG.md`.
 
-Author: Flavio Pendolino · License: PolyForm Noncommercial 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0) · Commercial use: penfla@me.com
+Author: Flavio Pendolino · License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0) · Commercial use: permitted under the Apache License 2.0
 Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 
-© 2026 Flavio Pendolino | PolyForm Noncommercial 1.0.0
+© 2026 Flavio Pendolino | Apache License 2.0

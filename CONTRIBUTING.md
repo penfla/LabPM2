@@ -32,7 +32,7 @@ npm start           # http://localhost:8080, data in ./data
 
 ## Licensing of contributions
 
-LabPM is licensed under [PolyForm Noncommercial 1.0.0](LICENSE). By submitting a contribution you confirm you have the right to do so and license it to the project under the same terms, and you grant the author the right to relicense it for commercial licensing (penfla@me.com).
+LabPM is licensed under the [Apache License 2.0](LICENSE). Unless you state otherwise, any contribution you intentionally submit for inclusion is licensed under the same terms, without additional conditions (Apache-2.0, section 5). Add yourself to the copyright line of files you substantially change if you wish.
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

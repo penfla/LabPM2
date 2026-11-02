@@ -86,4 +86,4 @@ Session object (`localStorage['labpm_v1']`, snapshot entries in `labpm_snaps_v1`
 - Changing `v` is reserved for breaking schema changes; a migration step will be added in `normSession`.
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

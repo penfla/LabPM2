@@ -1,6 +1,6 @@
 # Security
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.2 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
+Author: Flavio Pendolino · Version: 2.0.0-beta.3 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 
 ## Scope
 
@@ -41,4 +41,4 @@ Everything above about accounts, roles, CSRF and the audit trail applies to **se
 Email penfla@me.com with subject `LabPM security`, including version, steps and a minimal example. Please do not open a public issue for exploitable findings. Expect an acknowledgement within 7 days.
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

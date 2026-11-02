@@ -1,6 +1,6 @@
 # User guide
 
-Applies to LabPM 2.0.0-beta.2. Source: https://github.com/penfla/LabPM2
+Applies to LabPM 2.0.0-beta.3. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
@@ -208,4 +208,4 @@ If no LabPM server answers, the page asks for the shared folder (README, option 
 `Esc` closes the drawer. Focus rings on all controls; status is always text + colour; `prefers-reduced-motion` respected; light/dark follow the system in *Auto*.
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

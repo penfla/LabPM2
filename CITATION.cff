@@ -7,6 +7,6 @@ type: software
 authors:
   - family-names: Pendolino
     given-names: Flavio
-license: PolyForm-Noncommercial-1.0.0
+license: Apache-2.0
 repository-code: "https://github.com/penfla/labpm"
 url: "https://github.com/penfla/labpm"

@@ -1,0 +1,23 @@
+LabPM 2
+Copyright 2026 Flavio Pendolino
+
+This product includes software developed by Flavio Pendolino
+(https://github.com/penfla/LabPM2). It is derived from LabPM 1.3, also by
+Flavio Pendolino (https://github.com/penfla/LabPM).
+
+Licensed under the Apache License, Version 2.0. Versions of this repository
+before 2.0.0-beta.3 were published under the PolyForm Noncommercial License
+1.0.0; the copyright holder re-licensed the code and documentation of this
+repository under Apache-2.0 from 2.0.0-beta.3 on. Copies obtained earlier remain
+under the terms they were received with.
+
+Third-party components: none (Node.js built-ins only at runtime; system fonts).
+Optional development dependency: Playwright (Apache-2.0) for browser tests.
+
+Standards cited in the built-in templates (titles only; no standard text is
+reproduced): ASTM D3418, ASTM D3985 (https://www.astm.org); ISO 11357-3,
+ISO 1133-1, ISO 527-3 (https://www.iso.org).
+
+Asana, monday.com, Benchling, SciNote, Slack, Jira and other names are
+trademarks of their respective owners; mentions are for reference only and imply
+no affiliation.

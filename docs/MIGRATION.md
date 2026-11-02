@@ -1,6 +1,6 @@
 # Migrating from LabPM v1.3 (standalone) to v2
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.2 · License: PolyForm Noncommercial 1.0.0 · Commercial use: penfla@me.com
+Author: Flavio Pendolino · Version: 2.0.0-beta.3 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 Purpose: move the data of a v1.3 browser database into the v2 server. Method: export JSON in v1.3, import in v2. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 
@@ -27,4 +27,4 @@ AI disclosure: this tool performs deterministic calculations; it does not genera
 | Google Fonts | None (no third-party requests) |
 
 ---
-© Flavio Pendolino, 2026. This document is distributed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0).
+© Flavio Pendolino, 2026. This document is licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

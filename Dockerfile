@@ -1,6 +1,6 @@
-# License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Flavio Pendolino
-# https://polyformproject.org/licenses/noncommercial/1.0.0
+# https://www.apache.org/licenses/LICENSE-2.0
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json ./

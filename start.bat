@@ -1,7 +1,7 @@
 @echo off
-REM License-Identifier: PolyForm-Noncommercial-1.0.0
+REM SPDX-License-Identifier: Apache-2.0
 REM Copyright (c) 2026 Flavio Pendolino
-REM https://polyformproject.org/licenses/noncommercial/1.0.0
+REM https://www.apache.org/licenses/LICENSE-2.0
 REM Start LabPM. The only setting is "dataDir" in labpm.config.json (e.g. "\\\\NAS\\labpm" or "D:\\labpm-data").
 where node >nul 2>nul
 if errorlevel 1 (

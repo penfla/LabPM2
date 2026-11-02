@@ -1,12 +1,12 @@
 /*
- * License-Identifier: PolyForm-Noncommercial-1.0.0
+ * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 Flavio Pendolino
- * https://polyformproject.org/licenses/noncommercial/1.0.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.2
- * License: PolyForm Noncommercial 1.0.0
- * Commercial use: penfla@me.com
+ * Version: 2.0.0-beta.3
+ * License: Apache License 2.0
+ * Commercial use: permitted under the Apache License 2.0
  * Purpose: Server entry point: data folder (only setting), single-instance lock, daily backup, LAN addresses
  * Method: folder from --data, DATA_DIR or labpm.config.json {"dataDir"}; default ./data. Port 8080 (PORT to override)
  * Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
@@ -14,7 +14,7 @@
  * Scientific references: n/a
  * AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
  *
- * (c) 2026 Flavio Pendolino | PolyForm Noncommercial 1.0.0
+ * (c) 2026 Flavio Pendolino | Apache License 2.0
  */
 'use strict';
 var fs = require('node:fs');
@@ -23,7 +23,7 @@ var path = require('node:path');
 var app = require('./app');
 
 var ROOT = path.join(__dirname, '..');
-var VERSION = '2.0.0-beta.2';
+var VERSION = '2.0.0-beta.3';
 
 function readConfig() {
   var f = path.join(ROOT, 'labpm.config.json');

@@ -1,12 +1,12 @@
 <!--
-License-Identifier: PolyForm-Noncommercial-1.0.0
+SPDX-License-Identifier: Apache-2.0
 Copyright (c) 2026 Flavio Pendolino
-https://polyformproject.org/licenses/noncommercial/1.0.0
+https://www.apache.org/licenses/LICENSE-2.0
 
 Author: Flavio Pendolino
-Version: 2.0.0-beta.2
-License: PolyForm Noncommercial 1.0.0
-Commercial use: penfla@me.com
+Version: 2.0.0-beta.3
+License: Apache License 2.0
+Commercial use: permitted under the Apache License 2.0
 Purpose: Project, task, resource and request management for a chemical/polymer laboratory.
 Method: Single-page client (vanilla JavaScript) for the LabPM server: login, REST sync with per-record revisions, SSE live updates, field-level merge on conflict; finish-to-start date cascade on working days; task export as .xlsx (OOXML written in-page). Deterministic calculations.
 Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
@@ -764,7 +764,7 @@ function render(){
     '<div class="seg" role="group" aria-label="Theme">'+th+'</div>'+
     '<span class="who">'+esc(me().name)+' · '+esc(me().role)+' <button class="btn sm" data-act="logout">'+(MODE==='folder'?'Switch user':'Sign out')+'</button></span></div></header>'+
     '<div id="vb">'+body()+'</div>'+
-    '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a> · LabPM v2.0 · '+(MODE==='folder'?'shared folder '+esc(FB.h.name):'shared database on the LabPM server')+'</footer></main></div>'}
+    '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a> · LabPM v2.0 · '+(MODE==='folder'?'shared folder '+esc(FB.h.name):'shared database on the LabPM server')+'</footer></main></div>'}
 function renderBody(){var e=$('#vb');if(e)e.innerHTML=body()}
 function commit(){save();renderBody();renderDrawer();var tb=$('#tb');if(!tb&&S.tasks.some(function(t){return t.timer&&t.timer.user===S.me})||tb&&!S.tasks.some(function(t){return t.timer&&t.timer.user===S.me}))render()}
 function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
@@ -958,7 +958,7 @@ function vSet(){var ad=isAdmin(),json='';
 
 /* ---------- info and license ---------- */
 function vInfo(){
-  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>1.3</dd><dt>License</dt><dd>PolyForm Noncommercial 1.0.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
+  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>2.0.0-beta.3</dd><dt>License</dt><dd>Apache License 2.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
    '<dt>Purpose</dt><dd>Project, task, resource and request management in a chemical/polymer laboratory, with the typical features of Asana and monday.com.</dd>'+
    '<dt>Method</dt><dd>Vanilla JavaScript client for the LabPM server (SQLite, SSE live updates); finish-to-start date cascade on working days; workload = remaining hours spread over working days; data shared through the server; full export/import as JSON.</dd>'+
    '<dt>Disclaimer</dt><dd>validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.</dd>'+
@@ -966,7 +966,7 @@ function vInfo(){
    '<dt>Scientific references</dt><dd>ASTM D3418, ISO 11357-3, ISO 1133-1, ISO 527-3, ASTM D3985 (cited in the templates) · <a href="https://www.iso.org" target="_blank" rel="noopener">iso.org</a> · <a href="https://www.astm.org" target="_blank" rel="noopener">astm.org</a></dd>'+
    '<dt>Product references</dt><dd><a href="https://asana.com" target="_blank" rel="noopener">asana.com</a> · <a href="https://monday.com" target="_blank" rel="noopener">monday.com</a> · for structured experimental data: <a href="https://www.benchling.com" target="_blank" rel="noopener">Benchling</a>, <a href="https://www.scinote.net" target="_blank" rel="noopener">SciNote</a> (LabPM does not replace an ELN)</dd></dl>'+
    '<p><b>AI disclosure:</b> this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).</p></section>'+
-   '<section class="card"><details class="lic"><summary>License text</summary><pre>POLYFORM NONCOMMERCIAL LICENSE 1.0.0\n\nCopyright (c) 2026 Flavio Pendolino\nAll rights reserved.\nCommercial use requires a separate license: penfla@me.com\n\n--- ACCEPTANCE ---\nIn order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.\n\n--- COPYRIGHT LICENSE ---\nThe licensor grants you a copyright license for the software to do everything you might do with the software that is not commercial use or a use closely related to commercial use, for any term of years.\n\n--- NONCOMMERCIAL PURPOSES ---\nNoncommercial purposes include personal use, educational use, and research use. Noncommercial purposes do not include any purpose primarily intended for or directed toward commercial advantage or monetary compensation, or any use by any legal entity primarily engaged in the business of providing goods or services of the kind provided by the software or a closely related kind.\n\n--- COVENANTS (Copyleft) ---\nYou may not allow any third party to benefit from the grants of this license without enforcing all terms of this license as conditions for those grants.\n\n--- NOTICES ---\nEnsure all copies of the software include all copyright, patent, trademark, and attribution notices from the source you received them.\n\n--- COMMERCIALIZATION ---\nYou may not commercialize the software, meaning you may not grant licenses to use the software or distribute the software for a fee, nor may you otherwise seek monetary compensation in connection with the software.\n\n--- NO LIABILITY ---\nAs far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.\n\nFull license text: https://polyformproject.org/licenses/noncommercial/1.0.0/</pre></details></section>'}
+   '<section class="card"><details class="lic"><summary>License text</summary><pre>Copyright 2026 Flavio Pendolino\n\nLicensed under the Apache License, Version 2.0 (the "License"); you may not use this software except in compliance with the License. You may obtain a copy of the License at\n\n    https://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.\n\nThe full text is in the LICENSE file of the repository.</pre></details></section>'}
 
 /* ---------- session ---------- */
 function syncInfo(){if(MODE==='folder'&&FB.ro)return 'Read-only view of folder <b>'+esc(FB.h.name)+'</b> (this browser cannot write to a shared folder). You see the state at the time you opened it. <label class="btn sm">Reload folder<input type="file" webkitdirectory multiple hidden data-ch="fro"></label> To edit, use Chrome or Edge, or the LabPM server address.';if(MODE!=='folder')return 'All changes are written to the central server and appear in other open sessions within seconds. Roles are enforced by the server.';
