@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Browser end-to-end test, two concurrent sessions (login, live sync, RBAC)
@@ -91,6 +91,35 @@ test('two browsers (' + engine + '): login, live update, files, role enforcement
     await A.click('[data-act=nav][data-v=session]');
     await A.click('[data-act=bknow]');
     await A.waitForSelector('[data-act=bkrestore]', { timeout: 5000 });
+    // Quick add: project, tasks, subtasks and activities from one outline; ticking progresses the parent; progress per person
+    await A.click('[data-act=nav][data-v=tasks]'); await A.click('[data-act=qa]');
+    await A.fill('#qa-p', 'DSC campaign');
+    await A.fill('#qa-t', ['Prepare samples @Flavio #2 ~6h', '  Weigh 8 specimens #1 ~2h', '  Condition 48 h #2', '  - Check balance calibration', 'Run DSC @Flavio #3 ~12h', '  - [x] Label vials'].join('\n'));
+    await A.click('[data-act=qacreate]');
+    var api = function (page) { return page.evaluate(function () { return fetch('/api/state').then(function (r) { return r.json(); }).then(function (j) { return j.state.tasks; }); }); };
+    var pollTasks = async function (page, pred, ms) { var t0 = Date.now(), list; while (Date.now() - t0 < (ms || 8000)) { list = await page.evaluate(function () { return fetch('/api/state').then(function (r) { return r.json(); }).then(function (j) { return j.state.tasks; }); }); if (pred(list)) return list; await page.waitForTimeout(150); } throw new Error('timeout waiting for tasks; have: ' + list.map(function (t) { return t.title; }).join(' | ')); };
+    var ts0 = await pollTasks(A, function (l) { return l.some(function (t) { return t.title === 'Condition 48 h'; }); });
+    var ts = ts0, by = function (title) { return ts.filter(function (t) { return t.title === title; })[0]; };
+    var parent = by('Prepare samples'), w = by('Weigh 8 specimens'), c = by('Condition 48 h'), run = by('Run DSC');
+    assert.ok(w.parent === parent.id && c.parent === parent.id && !run.parent, 'indented lines are subtasks');
+    assert.strictEqual(w.assignee, parent.assignee, 'subtask inherits the assignee');
+    assert.strictEqual(c.checklist.length, 1); assert.strictEqual(run.checklist[0].done, true);
+    assert.strictEqual(parent.projectId, w.projectId);
+    await A.waitForSelector('tr[data-id="' + w.id + '"]');
+    await A.click('input[data-ch=taskchk][data-id="' + w.id + '"]');
+    await A.click('input[data-ch=taskchk][data-id="' + c.id + '"]');
+    await pollTasks(A, function (l) { return l.filter(function (t) { return t.id === parent.id; })[0].status === 'Done'; }); // parent follows its subtasks
+    await B.click('[data-act=nav][data-v=progress]');
+    await B.waitForFunction(function () { return /2 \/ 3/.test(document.querySelector('#vb').innerText); }, null, { timeout: 8000 }); // Flavio: 2 of 3 lowest-level tasks
+    // tick an activity and add a subtask from the task panel
+    await A.click('tr[data-id="' + c.id + '"] .dn, tr[data-id="' + c.id + '"] b');
+    await A.click('input[data-ch=acttick]');
+    await A.keyboard.press('Escape');
+    await A.click('tr[data-id="' + run.id + '"] b');
+    await A.fill('[data-enter=subadd]', 'Analyse curves #1'); await A.press('[data-enter=subadd]', 'Enter');
+    await pollTasks(A, function (l) { return l.some(function (t) { return t.title === 'Analyse curves' && t.parent === run.id && t.assignee === run.assignee; }); });
+    await B.waitForFunction(function () { return /2 \/ 2/.test(document.querySelector('#vb').innerText); }, null, { timeout: 8000 }); // activities: 2 of 2 done
+    await A.keyboard.press('Escape');
     // Viewer attempts a write through the API: forbidden server-side
     var s = await B.evaluate(function () { return fetch('/api/tasks/t1', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Done' }) }).then(function (r) { return r.status; }); });
     assert.strictEqual(s, 403);

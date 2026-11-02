@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Server-side role matrix (same as USER_GUIDE section 10)
@@ -18,9 +18,11 @@
 
 var KINDS = ['users', 'projects', 'tasks', 'fields', 'rules', 'goals', 'docs', 'files', 'templates'];
 // task fields a Researcher may change on a task assigned to them
-var RESEARCHER_TASK_KEYS = ['status', 'notes', 'est', 'tags', 'cf', 'log', 'timer', 'ovFired', 'priority'];
+var RESEARCHER_TASK_KEYS = ['status', 'notes', 'est', 'tags', 'cf', 'log', 'timer', 'ovFired', 'priority', 'checklist'];
+// extra keys on a subtask the Researcher is assigned to
+var RESEARCHER_SUBTASK_KEYS = ['title', 'start', 'due'];
 
-function can(user, op, kind, cur, next) {
+function can(user, op, kind, cur, next, ctx) {
   var r = user.role;
   if (r === 'Admin') return true;
   if (r === 'Viewer') return false;
@@ -29,14 +31,21 @@ function can(user, op, kind, cur, next) {
   // Researcher
   if (kind === 'docs' || kind === 'files') return op !== 'delete' || (kind === 'files' && cur && cur.by === user.id);
   if (kind === 'tasks') {
-    if (op === 'create') return !!next && next.src === 'form' && next.status === 'Triage';
-    if (op === 'delete') return false;
+    var parentOf = function (t) { return t && t.parent && ctx && ctx.task ? ctx.task(t.parent) : null; };
+    if (op === 'create') {
+      if (!next) return false;
+      if (next.src === 'form' && next.status === 'Triage') return true;
+      // a subtask under a task assigned to them, assigned to them
+      var par = parentOf(next);
+      return !!par && par.assignee === user.id && next.assignee === user.id;
+    }
+    if (op === 'delete') { var pp = parentOf(cur); return !!cur && !!pp && cur.assignee === user.id && pp.assignee === user.id; }
     if (!cur || cur.assignee !== user.id) return false;
     // update: only whitelisted keys may differ
-    var keys = Object.keys(next || {});
+    var keys = Object.keys(next || {}), extra = cur.parent ? RESEARCHER_SUBTASK_KEYS : [];
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
-      if (RESEARCHER_TASK_KEYS.indexOf(k) < 0 && JSON.stringify(next[k]) !== JSON.stringify(cur[k])) return false;
+      if (RESEARCHER_TASK_KEYS.indexOf(k) < 0 && extra.indexOf(k) < 0 && JSON.stringify(next[k]) !== JSON.stringify(cur[k])) return false;
     }
     return true;
   }

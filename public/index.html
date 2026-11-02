@@ -4,7 +4,7 @@ Copyright (c) 2026 Flavio Pendolino
 https://www.apache.org/licenses/LICENSE-2.0
 
 Author: Flavio Pendolino
-Version: 2.0.0-beta.3
+Version: 2.0.0-beta.4
 License: Apache License 2.0
 Commercial use: permitted under the Apache License 2.0
 Purpose: Project, task, resource and request management for a chemical/polymer laboratory.
@@ -47,7 +47,7 @@ h1{font-size:28px}h2{font-size:17px}h3{font-size:15px}
 .who{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0;box-shadow:0 1px 2px var(--wk)}
 .card h2{margin-bottom:14px}
-.muted{color:var(--muted)}.mono{font-family:var(--f-m);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.dn{text-decoration:line-through;opacity:.65}.chkc{width:28px}.pl{padding:6px 0;border-bottom:1px solid var(--line)}.pa{display:flex;flex-direction:column;gap:2px;padding:4px 0 0 28px}.mono{font-family:var(--f-m);font-variant-numeric:tabular-nums}
 .small{font-size:12px}
 input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%;min-width:0}
 input[type=checkbox]{width:auto}
@@ -263,13 +263,38 @@ Engine.prototype.fire = function (tr, t, depth) {
     else if (a.type === 'notify') self.notices.push({ rule: r.id, text: a.value + ' ("' + t.title + '")' });
   });
 };
+/* subtasks: a parent's dates span its subtasks; its status follows them (all Done -> Done, any started -> In progress) */
+Engine.prototype.kids = function (pid) { return this.tasks.filter(function (x) { return x.parent === pid; }); };
+Engine.prototype.rollup = function (pid) {
+  var p = this.byId[pid];
+  if (!p) return;
+  var kids = this.kids(pid);
+  if (!kids.length) return;
+  var start = kids.reduce(function (a, k) { return k.start < a ? k.start : a; }, kids[0].start);
+  var due = kids.reduce(function (a, k) { return k.due > a ? k.due : a; }, kids[0].due);
+  if (p.start !== start || p.due !== due) { p.start = start; p.due = due; p.ovFired = false; this.touch(p); this.cascadeFrom(p); }
+  var all = kids.every(function (k) { return k.status === 'Done'; });
+  var started = kids.some(function (k) { return k.status !== 'To do' && k.status !== 'Triage'; });
+  var st = p.status;
+  if (all) st = 'Done';
+  else if (p.status === 'Done') st = 'In progress';
+  else if (started && (p.status === 'To do' || p.status === 'Triage')) st = 'In progress';
+  if (st !== p.status) { p.status = st; this.touch(p); this.statusChanged(p, 0); }
+};
+/* closing a parent closes its open subtasks */
+Engine.prototype.closeKids = function (t) {
+  var self = this;
+  this.kids(t.id).forEach(function (k) { if (k.status !== 'Done') { k.status = 'Done'; self.touch(k); self.statusChanged(k, 0); } });
+};
 /* prev: task before the change (null if created); t: task after (already in the list) */
 Engine.prototype.update = function (prev, t) {
-  if (!prev) { this.fire({ type: 'created' }, t, 0); return; }
-  if (prev.status !== t.status) this.statusChanged(t, 0);
+  if (!prev) { this.fire({ type: 'created' }, t, 0); if (t.parent) this.rollup(t.parent); return; }
+  if (prev.status !== t.status) { this.statusChanged(t, 0); if (t.status === 'Done') this.closeKids(t); }
   if (prev.start !== t.start || prev.due !== t.due) { t.ovFired = false; this.touch(t); this.cascadeFrom(t); }
   var self = this;
   t.deps.filter(function (d) { return prev.deps.indexOf(d) < 0; }).forEach(function (d) { if (self.byId[d]) self.cascadeFrom(self.byId[d]); });
+  if (t.parent) this.rollup(t.parent);
+  if (prev.parent && prev.parent !== t.parent) this.rollup(prev.parent);
 };
 Engine.prototype.checkOverdue = function () {
   var self = this;
@@ -312,7 +337,11 @@ var N = {
       tags: strArr(o.tags), cf: o.cf && typeof o.cf === 'object' && !Array.isArray(o.cf) ? o.cf : {},
       log: Array.isArray(o.log) ? o.log.slice(0, 2000).map(function (l) { return { id: str(l && l.id, 40), u: idOrNull(l && l.u), date: isDate(l && l.date) ? l.date : o.start, h: num(l && l.h, 0), note: str(l && l.note, 500) }; }) : [],
       timer: o.timer && idOrNull(o.timer.user) && isFinite(+o.timer.start) ? { user: o.timer.user, start: +o.timer.start } : null,
-      created: isFinite(+o.created) ? +o.created : Date.now(), ovFired: !!o.ovFired
+      created: isFinite(+o.created) ? +o.created : Date.now(), ovFired: !!o.ovFired,
+      parent: idOrNull(o.parent) && o.parent !== o.id ? o.parent : null,
+      checklist: Array.isArray(o.checklist) ? o.checklist.slice(0, 200).filter(function (c) { return c && typeof c === 'object' && ID_RE.test(c.id) && typeof c.t === 'string' && c.t.trim(); }).map(function (c) {
+        return { id: c.id, t: c.t.trim().slice(0, 300), done: !!c.done, by: idOrNull(c.by), at: c.done && isFinite(+c.at) ? +c.at : null };
+      }) : []
     };
     if (o.src === 'form') { t.src = 'form'; t.requester = str(o.requester, 120); }
     if (o.start > o.due) bad('start after due');
@@ -470,11 +499,11 @@ var SCOL={'Triage':'--s0','To do':'--s1','In progress':'--s2','In review':'--s3'
 var PRIOS=['Low','Medium','High','Critical'];
 var ROLES=['Admin','Project manager','Researcher','Viewer'];
 var TOOLS=['DSC','TGA','FTIR','Rheometer','Extruder','MFR','Tensile tester','OTR','Other'];
-var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['files','Files'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Data & sync'],['settings','Settings'],['info','Info & license']]]];
+var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['progress','Team progress'],['files','Files'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Data & sync'],['settings','Settings'],['info','Info & license']]]];
 var NAVFLAT=[].concat.apply([],NAV.map(function(g){return g[1]}));
-var DESC={dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Files attached to tasks and projects, stored on the LabPM server.',portfolio:'Project progress and goals.',templates:'Start a project from a ready-made scheme.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',session:'Save your work, reopen it later or move it to another computer.',settings:'People, roles, custom fields and integrations.',info:'Author, license and references.'};
+var DESC={progress:'Who has done what: tasks, subtasks and activities per person.',dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Files attached to tasks and projects, stored on the LabPM server.',portfolio:'Project progress and goals.',templates:'Start a project from a ready-made scheme.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',session:'Save your work, reopen it later or move it to another computer.',settings:'People, roles, custom fields and integrations.',info:'Author, license and references.'};
 var TVIEWS=[['list','List'],['board','Board'],['timeline','Timeline'],['calendar','Calendar'],['workload','Workload']];
-var WN={kpi:'Indicators',status:'Task status',hours:'Hours per project',load:'6-week workload',upcoming:'Upcoming deadlines',conflicts:'Instrument conflicts',assistant:'Project summary'};
+var WN={kpi:'Indicators',status:'Task status',hours:'Hours per project',load:'6-week workload',upcoming:'Upcoming deadlines',conflicts:'Instrument conflicts',assistant:'Project summary',progress:'Progress by person'};
 
 /* ---------- date utilities ---------- */
 var pad=function(n){return String(n).padStart(2,'0')};
@@ -501,7 +530,7 @@ function opt(arr,val){return arr.map(function(a){var v=Array.isArray(a)?a[0]:a,l
 
 /* ---------- state ---------- */
 var S;
-function defaultUI(){var d=new Date();return {view:'dashboard',theme:'light',saved:0,tview:'list',q:'',fp:'',fa:'',fs:'',fpr:'',fdf:'',fdt:'',group:'none',cal:d.getFullYear()+'-'+pad(d.getMonth()+1),widgets:{kpi:1,status:1,hours:1,load:1,upcoming:1,conflicts:1,assistant:1},doc:null,drawer:null,confirmDel:null,ap:null,tpl:null,rb:{name:'',tt:'status_to',tv:'Done',ct:'none',cv:'',at:'notify',av:''}}}
+function defaultUI(){var d=new Date();return {view:'dashboard',theme:'light',saved:0,tview:'list',q:'',fp:'',fa:'',fs:'',fpr:'',fdf:'',fdt:'',group:'none',cal:d.getFullYear()+'-'+pad(d.getMonth()+1),widgets:{kpi:1,status:1,hours:1,load:1,upcoming:1,conflicts:1,assistant:1,progress:1},doc:null,drawer:null,confirmDel:null,ap:null,tpl:null,rb:{name:'',tt:'status_to',tv:'Done',ct:'none',cv:'',at:'notify',av:''}}}
 /* ---------- server sync (v2): API client, diff-based push, SSE pull, auth screens ---------- */
 var COLS=['users','projects','tasks','fields','rules','goals','docs','templates'];
 var MODE='server';
@@ -523,7 +552,10 @@ function diffOps(){var ops=[],seen={};
   return ops}
 function findEnt(k,id){return S[k].find(function(o){return o.id===id})}
 function setEnt(k,id,d){var a=S[k],i=a.findIndex(function(o){return o.id===id});if(d===null){if(i>=0)a.splice(i,1)}else if(i>=0)a[i]=d;else a.push(d)}
-function mergeInto(local,base,cur){var out=Object.assign({},cur);Object.keys(local).forEach(function(f){if(JSON.stringify(local[f])!==JSON.stringify(base[f]))out[f]=local[f]});return out}
+function mergeList(local,base,cur){var b={},c={},seen={},out=[];base.forEach(function(x){b[x.id]=x});cur.forEach(function(x){c[x.id]=x});
+  local.forEach(function(x){seen[x.id]=1;var bx=b[x.id],cx=c[x.id];if(bx&&JSON.stringify(x)===JSON.stringify(bx)){if(cx)out.push(cx)}else out.push(x)});
+  cur.forEach(function(x){if(!seen[x.id]&&!b[x.id])out.push(x)});return out}
+function mergeInto(local,base,cur){var out=Object.assign({},cur);Object.keys(local).forEach(function(f){if(JSON.stringify(local[f])!==JSON.stringify(base[f]))out[f]=(f==='checklist'&&Array.isArray(local[f])&&Array.isArray(cur[f]))?mergeList(local[f],base[f]||[],cur[f]):local[f]});return out}
 function pushOp(op,retry){var kk=key(op.k,op.id),path='/api/'+op.k+(op.m==='POST'?'':'/'+op.id),sent=op.o?JSON.stringify(op.o):null;
   return api(op.m,path,op.o,op.m==='POST'?null:REV[kk]).then(function(r){
     if(r.s>=200&&r.s<300){if(op.m==='DELETE'){delete SHADOW[kk];delete REV[kk]}else{SHADOW[kk]=sent;REV[kk]=r.j.rev}return}
@@ -693,8 +725,8 @@ var logged=function(t){return t.log.reduce(function(a,l){return a+l.h},0)};
 var isOver=function(t){return t.status!=='Done'&&t.due<TODAY()};
 var isBlocked=function(t){return t.deps.some(function(d){var x=T(d);return x&&x.status!=='Done'})};
 var blockers=function(t){return t.deps.map(T).filter(function(x){return x&&x.status!=='Done'})};
-function pProgress(pid){var ts=S.tasks.filter(function(t){return t.projectId===pid});if(!ts.length)return 0;var w=ts.reduce(function(a,t){return a+(t.est||1)},0),d=ts.filter(function(t){return t.status==='Done'}).reduce(function(a,t){return a+(t.est||1)},0);return Math.round(100*d/w)}
-function pHealth(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id});if(p.status&&p.status!=='auto')return p.status;if(ts.length&&ts.every(function(t){return t.status==='Done'}))return 'Done';return ts.some(isOver)?'At risk':'On track'}
+function pProgress(pid){var ts=leafTasks().filter(function(t){return t.projectId===pid});if(!ts.length)return 0;var w=ts.reduce(function(a,t){return a+(t.est||1)},0),d=ts.filter(function(t){return t.status==='Done'}).reduce(function(a,t){return a+(t.est||1)},0);return Math.round(100*d/w)}
+function pHealth(p){var ts=leafTasks().filter(function(t){return t.projectId===p.id});if(p.status&&p.status!=='auto')return p.status;if(ts.length&&ts.every(function(t){return t.status==='Done'}))return 'Done';return ts.some(isOver)?'At risk':'On track'}
 function dependsOn(a,b,seen){seen=seen||{};if(seen[a])return false;seen[a]=1;var x=T(a);if(!x)return false;return x.deps.some(function(d){return d===b||dependsOn(d,b,seen)})}
 
 /* ---------- custom fields: formulas ---------- */
@@ -710,7 +742,7 @@ function calc(t,f){var bad=false;var ex=String(f.formula||'').replace(/\{([^}]+)
 function cfv(t,f){if(f.type==='formula'){var r=calc(t,f);return r==null?'—':nf(r,2)}var v=t.cf[f.id];if(f.type==='checkbox')return v?'yes':'';if(f.type==='date')return v?fd(v):'';return v==null?'':String(v)}
 
 /* ---------- tasks: creation, status, dates, cascade ---------- */
-function newTask(o){var t=Object.assign({id:uid('t'),projectId:S.projects[0]&&S.projects[0].id,title:'New task',status:'To do',assignee:null,priority:'Medium',start:normWD(TODAY()),due:normWD(TODAY()),est:0,deps:[],tags:[],cf:{},notes:'',log:[],timer:null,created:Date.now()},o);S.tasks.push(t);return t}
+function newTask(o){var t=Object.assign({id:uid('t'),projectId:S.projects[0]&&S.projects[0].id,title:'New task',status:'To do',assignee:null,priority:'Medium',start:normWD(TODAY()),due:normWD(TODAY()),est:0,deps:[],tags:[],cf:{},notes:'',log:[],timer:null,created:Date.now(),parent:null,checklist:[]},o);S.tasks.push(t);return t}
 function setDates(t,s,d){t.start=s;t.due=d;t.ovFired=false;log('Dates of "'+t.title+'": '+fd(s)+' → '+fd(d));return 0}
 function applyStatus(t,st,depth,fromRule){
   if(t.status===st)return true;
@@ -725,7 +757,7 @@ function stopTimer(t,quiet){if(!t.timer)return;var h=Math.round((Date.now()-t.ti
 
 /* ---------- workload and conflicts ---------- */
 function workload(weeks){var mon=mondayOf(TODAY()),res={};
-  S.tasks.filter(function(t){return t.status!=='Done'}).forEach(function(t){
+  leafTasks().filter(function(t){return t.status!=='Done'}).forEach(function(t){
     var rem=Math.max(t.est-logged(t),0);if(!rem)return;
     var days=[],c=normWD(t.start),g=0;while(c<=t.due&&g<400){days.push(c);c=nextWD(c);g++}
     if(!days.length)days.push(normWD(t.start));
@@ -733,7 +765,7 @@ function workload(weeks){var mon=mondayOf(TODAY()),res={};
     days.forEach(function(dd){var i=Math.max(0,Math.floor(diffD(mon,dd)/7));if(i<weeks)res[k][i]+=per})});
   return {res:res,mon:mon}}
 function conflicts(){var f=S.fields.find(function(x){return x.name==='Instrument'});if(!f)return [];var out=[];
-  var ts=S.tasks.filter(function(t){return t.status!=='Done'&&t.cf[f.id]&&t.cf[f.id]!=='Other'});
+  var ts=leafTasks().filter(function(t){return t.status!=='Done'&&t.cf[f.id]&&t.cf[f.id]!=='Other'});
   for(var i=0;i<ts.length;i++)for(var j=i+1;j<ts.length;j++){var a=ts[i],b=ts[j];if(a.cf[f.id]===b.cf[f.id]&&a.start<=b.due&&b.start<=a.due)out.push([a,b,a.cf[f.id]])}
   return out}
 
@@ -767,24 +799,24 @@ function render(){
     '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a> · LabPM v2.0 · '+(MODE==='folder'?'shared folder '+esc(FB.h.name):'shared database on the LabPM server')+'</footer></main></div>'}
 function renderBody(){var e=$('#vb');if(e)e.innerHTML=body()}
 function commit(){save();renderBody();renderDrawer();var tb=$('#tb');if(!tb&&S.tasks.some(function(t){return t.timer&&t.timer.user===S.me})||tb&&!S.tasks.some(function(t){return t.timer&&t.timer.user===S.me}))render()}
-function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
+function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'progress':return vProgress();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
 
 /* ---------- dashboard ---------- */
-function wKpi(){var op=S.tasks.filter(function(t){return t.status!=='Done'}),ov=op.filter(isOver).length,bl=op.filter(isBlocked).length;
+function wKpi(){var op=leafTasks().filter(function(t){return t.status!=='Done'}),ov=op.filter(isOver).length,bl=op.filter(isBlocked).length;
   var est=op.reduce(function(a,t){return a+t.est},0),lg=op.reduce(function(a,t){return a+logged(t)},0),risk=S.projects.filter(function(p){return pHealth(p)==='At risk'}).length;
   var k=function(v,l){return '<div><b>'+v+'</b><span>'+l+'</span></div>'};
   return '<section class="card full"><div class="kpis">'+k(op.length,'open tasks')+k(ov,'overdue')+k(bl,'blocked by dependencies')+k(nf(lg)+' / '+nf(est)+' h','hours logged / estimated (open)')+k(risk,'projects at risk')+k(conflicts().length,'instrument conflicts')+'</div></section>'}
-function wStatus(){var mx=Math.max(1,Math.max.apply(null,STATUSES.map(function(s){return S.tasks.filter(function(t){return t.status===s}).length})));
-  return '<section class="card"><h2>Task status</h2><div class="lst">'+STATUSES.map(function(s){var n=S.tasks.filter(function(t){return t.status===s}).length;return '<div><span style="min-width:110px">'+st(s)+'</span><span class="grow" style="flex:1"><div class="bar"><i style="width:'+(100*n/mx)+'%;background:var('+SCOL[s]+')"></i></div></span><span class="mono">'+n+'</span></div>'}).join('')+'</div></section>'}
-function wHours(){var rows=S.projects.map(function(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id});return {p:p,e:ts.reduce(function(a,t){return a+t.est},0),l:ts.reduce(function(a,t){return a+logged(t)},0)}});
+function wStatus(){var mx=Math.max(1,Math.max.apply(null,STATUSES.map(function(s){return leafTasks().filter(function(t){return t.status===s}).length})));
+  return '<section class="card"><h2>Task status</h2><div class="lst">'+STATUSES.map(function(s){var n=leafTasks().filter(function(t){return t.status===s}).length;return '<div><span style="min-width:110px">'+st(s)+'</span><span class="grow" style="flex:1"><div class="bar"><i style="width:'+(100*n/mx)+'%;background:var('+SCOL[s]+')"></i></div></span><span class="mono">'+n+'</span></div>'}).join('')+'</div></section>'}
+function wHours(){var rows=S.projects.map(function(p){var ts=leafTasks().filter(function(t){return t.projectId===p.id});return {p:p,e:ts.reduce(function(a,t){return a+t.est},0),l:ts.reduce(function(a,t){return a+logged(t)},0)}});
   var mx=Math.max(1,Math.max.apply(null,rows.map(function(r){return Math.max(r.e,r.l)})));
   return '<section class="card"><h2>Hours per project</h2><div class="lst">'+rows.map(function(r){return '<div style="display:block"><div class="small">'+pdot(r.p)+esc(r.p.name)+' <span class="mono muted">'+nf(r.l)+' / '+nf(r.e)+' h</span></div><div class="bar" style="margin:3px 0"><i style="width:'+(100*r.e/mx)+'%;background:var(--line)"></i></div><div class="bar"><i style="width:'+(100*r.l/mx)+'%"></i></div></div>'}).join('')+'</div><p class="small muted" style="margin:8px 0 0">Grey bar: estimated hours. Coloured bar: logged hours.</p></section>'}
 function wLoad(){var w=workload(6);var rows=S.users.map(function(u){return [u.name,u.cap,w.res[u.id]||Array(6).fill(0)]});
   return '<section class="card"><h2>Workload, next 6 weeks</h2><div class="lst">'+rows.map(function(r){return '<div><span style="min-width:90px">'+esc(r[0])+'</span><span class="row" style="gap:3px;flex:1">'+r[2].map(function(h){var q=h/r[1];return '<span class="grow" title="'+nf(h)+' h of '+r[1]+' h"><div class="bar '+(q>1?'b':q>.85?'w':'g')+'"><i style="width:'+Math.min(100,100*q)+'%"></i></div></span>'}).join('')+'</span></div>'}).join('')+'</div><p class="small muted" style="margin:8px 0 0">Each bar is one week starting from the current one; red above capacity.</p></section>'}
-function wUp(){var ts=S.tasks.filter(function(t){return t.status!=='Done'&&t.due<=addD(TODAY(),7)}).sort(function(a,b){return a.due<b.due?-1:1}).slice(0,8);
+function wUp(){var ts=leafTasks().filter(function(t){return t.status!=='Done'&&t.due<=addD(TODAY(),7)}).sort(function(a,b){return a.due<b.due?-1:1}).slice(0,8);
   return '<section class="card"><h2>Deadlines within 7 days</h2>'+(ts.length?'<div class="lst">'+ts.map(function(t){return '<div><button class="btn sm" data-act="open" data-id="'+t.id+'">'+fd(t.due)+'</button><span class="grow" style="flex:1">'+esc(t.title)+flags(t)+'</span><span class="small muted">'+esc(uname(t.assignee))+'</span></div>'}).join('')+'</div>':'<p class="muted">No imminent deadlines.</p>')+'</section>'}
 function wConf(){var c=conflicts();return '<section class="card"><h2>Instrument conflicts</h2>'+(c.length?'<div class="lst">'+c.map(function(x){return '<div><span><span class="tag">'+esc(x[2])+'</span> '+esc(x[0].title)+' ↔ '+esc(x[1].title)+'</span><button class="btn sm" data-act="open" data-id="'+x[0].id+'">Open</button></div>'}).join('')+'</div>':'<p class="muted">No overlaps on the same instrument.</p>')+'<p class="small muted" style="margin:8px 0 0">Computed from the "Instrument" field on tasks that are not done.</p></section>'}
-function summary(pid){var p=P(pid);if(!p)return [];var ts=S.tasks.filter(function(t){return t.projectId===pid}),op=ts.filter(function(t){return t.status!=='Done'});
+function summary(pid){var p=P(pid);if(!p)return [];var ts=leafTasks().filter(function(t){return t.projectId===pid}),op=ts.filter(function(t){return t.status!=='Done'});
   var out=['Progress '+pProgress(pid)+'% ('+(ts.length-op.length)+' of '+ts.length+' tasks done).'];
   var ov=op.filter(isOver);out.push(ov.length?'Overdue: '+ov.map(function(t){return t.title+' (due '+fd(t.due)+')'}).join('; ')+'.':'No overdue tasks.');
   var bl=op.filter(isBlocked);if(bl.length)out.push('Blocked: '+bl.map(function(t){return t.title+' ← '+blockers(t).map(function(b){return b.title}).join(', ')}).join('; ')+'.');
@@ -793,12 +825,12 @@ function summary(pid){var p=P(pid);if(!p)return [];var ts=S.tasks.filter(functio
   var e=ts.reduce(function(a,t){return a+t.est},0),l=ts.reduce(function(a,t){return a+logged(t)},0);out.push('Hours logged '+nf(l)+' of '+nf(e)+' estimated.');return out}
 function wAssist(){var pid=S.ui.ap||(S.projects[0]&&S.projects[0].id);
   return '<section class="card"><h2>Project summary</h2><div class="tools"><select data-ch="ap">'+opt(pOpts(),pid)+'</select></div><ul>'+summary(pid).map(function(l){return '<li>'+esc(l)+'</li>'}).join('')+'</ul><p class="small muted" style="margin:0">Generated by fixed rules on task data, without generative AI.</p></section>'}
-function vDash(){var W=S.ui.widgets,fn={kpi:wKpi,status:wStatus,hours:wHours,load:wLoad,upcoming:wUp,conflicts:wConf,assistant:wAssist};
+function vDash(){var W=S.ui.widgets,fn={kpi:wKpi,status:wStatus,hours:wHours,load:wLoad,upcoming:wUp,conflicts:wConf,assistant:wAssist,progress:wProg};
   return '<details class="wcfg"><summary>Visible widgets</summary>'+Object.keys(WN).map(function(k){return '<label><input type="checkbox" data-ch="widget" data-k="'+k+'"'+(W[k]?' checked':'')+'> '+WN[k]+'</label>'}).join('')+'</details><div class="wgrid">'+Object.keys(WN).filter(function(k){return W[k]}).map(function(k){return fn[k]()}).join('')+'</div>'}
 
 /* ---------- portfolio and goals ---------- */
 function vPort(){
-  var rows=S.projects.map(function(p){var ts=S.tasks.filter(function(t){return t.projectId===p.id}),h=pHealth(p),pg=pProgress(p.id);
+  var rows=S.projects.map(function(p){var ts=leafTasks().filter(function(t){return t.projectId===p.id}),h=pHealth(p),pg=pProgress(p.id);
     var s=ts.map(function(t){return t.start}).sort()[0],d=ts.map(function(t){return t.due}).sort().slice(-1)[0];
     return '<tr><td>'+pdot(p)+'<b>'+esc(p.name)+'</b></td><td><select data-ch="pstat" data-id="'+p.id+'"'+(isPM()?'':' disabled')+'>'+opt([['auto','Auto: '+(pHealth(Object.assign({},p,{status:'auto'})))],'On track','At risk','On hold','Done'],p.status||'auto')+'</select></td><td style="min-width:130px"><div class="bar'+(h==='At risk'?' b':'')+'"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></td><td class="mono small">'+fd(s)+' → '+fd(d)+'</td><td class="mono">'+ts.filter(function(t){return t.status!=='Done'}).length+' open, '+ts.filter(isOver).length+' overdue</td><td class="mono">'+nf(ts.reduce(function(a,t){return a+logged(t)},0))+' / '+nf(ts.reduce(function(a,t){return a+t.est},0))+' h</td><td><button class="btn sm" data-act="projdoc" data-id="'+p.id+'">Notes</button></td></tr>'}).join('');
   var goals=S.goals.map(function(g){var pg=g.pids.length?Math.round(g.pids.reduce(function(a,id){return a+pProgress(id)},0)/g.pids.length):0,late=g.target<TODAY()&&pg<100;
@@ -811,7 +843,7 @@ function vPort(){
 /* ---------- tasks: toolbar and views ---------- */
 function filtered(){var q=S.ui.q.toLowerCase();return S.tasks.filter(function(t){return (!S.ui.fp||t.projectId===S.ui.fp)&&(!S.ui.fa||(S.ui.fa==='_'?!t.assignee:t.assignee===S.ui.fa))&&(!S.ui.fs||t.status===S.ui.fs)&&(!S.ui.fpr||t.priority===S.ui.fpr)&&(!S.ui.fdf||t.due>=S.ui.fdf)&&(!S.ui.fdt||t.due<=S.ui.fdt)&&(!q||(t.title+' '+t.tags.join(' ')).toLowerCase().indexOf(q)>=0)})}
 function vTasks(){var u=S.ui;
-  return '<div class="tools"><div class="seg" role="group" aria-label="View">'+TVIEWS.map(function(v){return '<button data-act="tview" data-v="'+v[0]+'" aria-pressed="'+(u.tview===v[0])+'">'+v[1]+'</button>'}).join('')+'</div>'+
+  return (u.qa&&isPM()?vQuick():'')+'<div class="tools"><div class="seg" role="group" aria-label="View">'+TVIEWS.map(function(v){return '<button data-act="tview" data-v="'+v[0]+'" aria-pressed="'+(u.tview===v[0])+'">'+v[1]+'</button>'}).join('')+'</div>'+
    '<input type="search" id="q" data-in="q" placeholder="Search" value="'+esc(u.q)+'" style="width:150px">'+
    '<select data-ch="fp" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),u.fp)+'</select>'+
    '<select data-ch="fa" aria-label="Assignee">'+opt([['','Everyone'],['_','Unassigned']].concat(S.users.map(function(x){return [x.id,x.name]})),u.fa)+'</select>'+
@@ -821,20 +853,20 @@ function vTasks(){var u=S.ui;
    (u.q||u.fp||u.fa||u.fs||u.fpr||u.fdf||u.fdt?'<button class="btn" data-act="clearf">Clear filters</button>':'')+
    (u.tview==='list'?'<select data-ch="group" aria-label="Group by">'+opt([['none','No grouping'],['status','By status'],['project','By project'],['assignee','By person'],['priority','By priority']],u.group)+'</select>':'')+
    '<button class="btn" data-act="xlsx" id="xl" title="Exports the tasks matching the filters above">Export Excel (<span id="xln">'+filtered().length+'</span>)</button>'+
-   (isPM()?'<button class="btn pri" data-act="newtask">+ Task</button>':'')+'</div><div id="tv">'+tv()+'</div>'}
+   (isPM()?'<button class="btn" data-act="qa" aria-pressed="'+(!!u.qa)+'">Quick add</button><button class="btn pri" data-act="newtask">+ Task</button>':'')+'</div><div id="tv">'+tv()+'</div>'}
 function tv(){switch(S.ui.tview){case 'board':return vBoard();case 'timeline':return vTL();case 'calendar':return vCal();case 'workload':return vWL();default:return vList()}}
-function vList(){var ts=filtered(),g=S.ui.group,cols=8+S.fields.length;
+function vList(){var ts=orderTree(filtered()),g=S.ui.group,cols=9+S.fields.length;
   var key={status:function(t){return t.status},project:function(t){return (P(t.projectId)||{}).name||'—'},assignee:function(t){return uname(t.assignee)},priority:function(t){return t.priority}}[g];
   var groups=[['',ts]];
   if(key){var m={};ts.forEach(function(t){var k=key(t);(m[k]=m[k]||[]).push(t)});var ks=Object.keys(m);if(g==='status')ks.sort(function(a,b){return STATUSES.indexOf(a)-STATUSES.indexOf(b)});if(g==='priority')ks.sort(function(a,b){return PRIOS.indexOf(b)-PRIOS.indexOf(a)});groups=ks.map(function(k){return [k,m[k]]})}
-  var row=function(t){var p=P(t.projectId);return '<tr data-act="open" data-id="'+t.id+'"><td><b>'+esc(t.title)+'</b>'+flags(t)+(t.tags.length?' '+t.tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>'}).join(' '):'')+'</td><td>'+pdot(p)+esc(p?p.name:'—')+'</td><td>'+st(t.status)+'</td><td>'+esc(uname(t.assignee))+'</td><td>'+pr(t.priority)+'</td><td class="mono">'+fd(t.start)+'</td><td class="mono">'+fd(t.due)+'</td><td class="mono">'+nf(logged(t))+' / '+nf(t.est)+'</td>'+S.fields.map(function(f){return '<td class="mono">'+esc(cfv(t,f))+'</td>'}).join('')+'</tr>'};
-  return '<div class="tbw"><table class="tbl"><thead><tr><th>Title</th><th>Project</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Start</th><th>Due</th><th>Hrs log./est.</th>'+S.fields.map(function(f){return '<th>'+esc(f.name)+'</th>'}).join('')+'</tr></thead><tbody>'+
+  var row=function(t){var p=P(t.projectId);return '<tr data-act="open" data-id="'+t.id+'"><td data-stop class="chkc"><input type="checkbox" data-ch="taskchk" data-id="'+t.id+'"'+(t.status==='Done'?' checked':'')+(canEdit(t)?'':' disabled')+' aria-label="Done"></td><td'+(t.parent?' style="padding-left:26px"':'')+'>'+(t.parent?'<span class="muted">↳ </span>':'')+'<b'+(t.status==='Done'?' class="dn"':'')+'>'+esc(t.title)+'</b>'+chips(t)+flags(t)+(t.tags.length?' '+t.tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>'}).join(' '):'')+'</td><td>'+pdot(p)+esc(p?p.name:'—')+'</td><td>'+st(t.status)+'</td><td>'+esc(uname(t.assignee))+'</td><td>'+pr(t.priority)+'</td><td class="mono">'+fd(t.start)+'</td><td class="mono">'+fd(t.due)+'</td><td class="mono">'+nf(logged(t))+' / '+nf(t.est)+'</td>'+S.fields.map(function(f){return '<td class="mono">'+esc(cfv(t,f))+'</td>'}).join('')+'</tr>'};
+  return '<div class="tbw"><table class="tbl"><thead><tr><th></th><th>Title</th><th>Project</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Start</th><th>Due</th><th>Hrs log./est.</th>'+S.fields.map(function(f){return '<th>'+esc(f.name)+'</th>'}).join('')+'</tr></thead><tbody>'+
    (ts.length?groups.map(function(gr){return (gr[0]?'<tr class="gh"><td colspan="'+cols+'">'+esc(gr[0])+' <span class="muted mono">'+gr[1].length+'</span></td></tr>':'')+gr[1].map(row).join('')}).join(''):'<tr><td colspan="'+cols+'" class="muted">No tasks match the filters.</td></tr>')+'</tbody></table></div>'}
 function vBoard(){var ts=filtered();
   return '<div class="board">'+STATUSES.map(function(s){var c=ts.filter(function(t){return t.status===s});
    return '<div class="col" data-drop="'+s+'"><h3>'+st(s)+'<span class="mono muted">'+c.length+'</span></h3>'+c.map(function(t){var p=P(t.projectId),tool=S.fields[0]&&t.cf[S.fields[0].id];
-    return '<button class="kc" draggable="true" data-drag="'+t.id+'" data-act="open" data-id="'+t.id+'"><span class="t">'+esc(t.title)+'</span><span class="m">'+pdot(p)+'<span>'+esc(ini(uname(t.assignee))||'—')+'</span><span class="mono">'+fd(t.due)+'</span>'+(tool?'<span class="tag">'+esc(tool)+'</span>':'')+flags(t)+'</span></button>'}).join('')+'</div>'}).join('')+'</div><p class="small muted">Drag cards between columns (mouse) or change the status from the task detail.</p>'}
-function vTL(){var ts=filtered().slice().sort(function(a,b){return a.projectId===b.projectId?(a.start<b.start?-1:1):(S.projects.indexOf(P(a.projectId))-S.projects.indexOf(P(b.projectId)))});
+    return '<button class="kc" draggable="true" data-drag="'+t.id+'" data-act="open" data-id="'+t.id+'"><span class="t">'+(t.parent?'↳ ':'')+esc(t.title)+chips(t)+'</span><span class="m">'+pdot(p)+'<span>'+esc(ini(uname(t.assignee))||'—')+'</span><span class="mono">'+fd(t.due)+'</span>'+(tool?'<span class="tag">'+esc(tool)+'</span>':'')+flags(t)+'</span></button>'}).join('')+'</div>'}).join('')+'</div><p class="small muted">Drag cards between columns (mouse) or change the status from the task detail.</p>'}
+function vTL(){var ts=orderTree(filtered().slice().sort(function(a,b){return a.projectId===b.projectId?(a.start<b.start?-1:1):(S.projects.indexOf(P(a.projectId))-S.projects.indexOf(P(b.projectId)))}));
   var CW=24,RH=30,HH=34,LW=210,t0=mondayOf(addD(TODAY(),-7));
   if(ts.length){var mn=ts.map(function(t){return t.start}).sort()[0];if(mn<t0)t0=mondayOf(mn)}
   var end=addD(TODAY(),70);ts.forEach(function(t){if(t.due>end)end=t.due});var days=Math.ceil((diffD(t0,end)+8)/7)*7,W=days*CW;
@@ -912,6 +944,79 @@ function vAuto(){var b=S.ui.rb,ed=isPM();
    '<label>Value<span>'+valInput(b.at,b.av,'av')+'</span></label>'+
    '<label class="full"><button class="btn pri" data-act="ruleadd" style="width:max-content">Add rule</button></label></div><p class="small muted" style="margin:10px 0 0">Rules apply on every change. Overdue rules are evaluated on load and every minute. Maximum chain depth: 3.</p></section>':'')}
 
+/* ---------- subtasks, activities (checklists), progress ---------- */
+var kidsOf=function(t){return S.tasks.filter(function(x){return x.parent===t.id})};
+var hasKids=function(t){return S.tasks.some(function(x){return x.parent===t.id})};
+var leafTasks=function(){var ps={};S.tasks.forEach(function(x){if(x.parent)ps[x.parent]=1});return S.tasks.filter(function(t){return !ps[t.id]})};
+var acts=function(t){return t.checklist||[]};
+var actDone=function(t){return acts(t).filter(function(c){return c.done}).length};
+var pct=function(d,n){return n?Math.round(100*d/n):0};
+var pbar=function(d,n){return '<div class="bar g" title="'+d+' of '+n+'"><i style="width:'+pct(d,n)+'%"></i></div>'};
+var canDelTask=function(t){return isPM()||(role()==='Researcher'&&!!t.parent&&t.assignee===S.me&&(T(t.parent)||{}).assignee===S.me)};
+/* parents followed by their subtasks, keeping the order of the rest */
+function orderTree(ts){var ids={},kids={},out=[];ts.forEach(function(t){ids[t.id]=1});ts.forEach(function(t){if(t.parent&&ids[t.parent])(kids[t.parent]=kids[t.parent]||[]).push(t)});
+  ts.forEach(function(t){if(t.parent&&ids[t.parent])return;out.push(t);(kids[t.id]||[]).forEach(function(k){out.push(k)})});return out}
+function chips(t){var k=kidsOf(t),h='';if(k.length)h+=' <span class="tag" title="Subtasks done">'+k.filter(function(x){return x.status==='Done'}).length+'/'+k.length+' sub</span>';var a=acts(t);if(a.length)h+=' <span class="tag" title="Activities done">☑ '+actDone(t)+'/'+a.length+'</span>';return h}
+/* display-only twin of Engine.rollup (the server / shared logic stays authoritative) */
+function localRollup(p){var k=kidsOf(p);if(!k.length)return;var s0=k.reduce(function(a,x){return x.start<a?x.start:a},k[0].start),d0=k.reduce(function(a,x){return x.due>a?x.due:a},k[0].due);p.start=s0;p.due=d0;
+  if(k.every(function(x){return x.status==='Done'}))p.status='Done';else if(p.status==='Done')p.status='In progress'}
+function parseQuick(s){var o={title:'',assignee:undefined,days:0,est:0,prio:'',start:'',due:'',badUser:''};
+  s=s.replace(/(^|\s)@(\S+)/,function(m,sp,n){var u=S.users.find(function(x){return x.name.toLowerCase().indexOf(n.toLowerCase())>=0});if(u)o.assignee=u.id;else o.badUser=n;return sp});
+  s=s.replace(/(^|\s)#(\d+)(?=\s|$)/,function(m,sp,n){o.days=Math.min(60,parseInt(n,10));return sp});
+  s=s.replace(/(^|\s)~(\d+(?:[.,]\d+)?)h?(?=\s|$)/,function(m,sp,n){o.est=parseFloat(n.replace(',','.'));return sp});
+  s=s.replace(/(^|\s)!(low|med|medium|high|crit|critical)(?=\s|$)/i,function(m,sp,n){n=n.toLowerCase();o.prio={low:'Low',med:'Medium',medium:'Medium',high:'High',crit:'Critical',critical:'Critical'}[n];return sp});
+  s=s.replace(/(^|\s)(start|due):(\d{4}-\d{2}-\d{2})(?=\s|$)/gi,function(m,sp,k,v){o[k.toLowerCase()]=v;return sp});
+  o.title=s.replace(/\s+/g,' ').trim();return o}
+function mkTaskQuick(q,pid,parent,base){var s0=normWD(q.start&&DT.test(q.start)?q.start:base),d0=q.due&&DT.test(q.due)?q.due:addWD(s0,Math.max((q.days||1)-1,0));if(d0<s0)d0=s0;
+  return newTask({projectId:pid,title:q.title||'New task',status:'To do',assignee:q.assignee!==undefined?q.assignee:(parent?parent.assignee:null),priority:q.prio||'Medium',start:s0,due:d0,est:q.est||0,parent:parent?parent.id:null})}
+/* outline: "# Project" / task / indented subtask / "- activity" */
+function parseOutline(text){var items=[],last=null,top=null;
+  text.split(/\r?\n/).forEach(function(raw){if(!raw.trim())return;var line=raw.replace(/\t/g,'    '),ind=/^ */.exec(line)[0].length,s0=line.trim(),m;
+    if(/^#{1,3}\s+\S/.test(s0)){items.push({k:'project',name:s0.replace(/^#+\s+/,'').trim()});top=null;last=null;return}
+    if((m=/^(?:[-*•]|\[( |x|X)\])\s+(.*)$/.exec(s0))){if(!last){items.push({k:'warn',text:s0});return}var tx=(m[2]||'').trim(),dn=m[1]==='x'||m[1]==='X',mm=/^\[( |x|X)\]\s+(.*)$/.exec(tx);if(mm){tx=mm[2];dn=dn||mm[1]!==' '}items.push({k:'act',t:tx.slice(0,300),done:dn,of:last});return}
+    var q=parseQuick(s0),it;if(ind>0&&top){it={k:'sub',q:q,parent:top}}else{it={k:'task',q:q};top=it}items.push(it);last=it});
+  return items}
+function vQuick(){var sel=(S.ui.fp&&P(S.ui.fp)?P(S.ui.fp).name:(S.projects[0]?S.projects[0].name:''));
+  return '<section class="card"><h2>Quick add</h2><div class="form"><label>Project (existing name or a new one)<input id="qa-p" list="qa-pl" value="'+esc(sel)+'" autocomplete="off"><datalist id="qa-pl">'+S.projects.map(function(p){return '<option value="'+esc(p.name)+'">'}).join('')+'</datalist></label><label>Start date<input type="date" id="qa-d" value="'+normWD(TODAY())+'"></label>'+
+   '<label class="full">Outline — one line each<textarea id="qa-t" rows="9" spellcheck="false" placeholder="# DSC campaign&#10;Prepare samples @Rossi #2 ~6h !high&#10;  Weigh 8 specimens @Bianchi #1 ~2h&#10;  Condition 48 h #2&#10;  - Check balance calibration&#10;  - [x] Label vials&#10;Run DSC @Rossi #3 ~12h due:2026-12-18"></textarea></label>'+
+   '<label class="full"><span class="row"><button class="btn pri" data-act="qacreate">Create</button><button class="btn" data-act="qa">Close</button></span></label></div>'+
+   '<ul class="small muted"><li><span class="mono"># Name</span> starts or selects a project (optional if the field above is filled).</li><li>A normal line is a <b>task</b>; an <b>indented</b> line below it is a <b>subtask</b> (the task then spans its subtasks).</li><li><span class="mono">- text</span>, <span class="mono">* text</span> or <span class="mono">[ ] text</span> is an <b>activity</b> (checklist item) of the task or subtask above; <span class="mono">[x]</span> is already done.</li><li>Options on task lines: <span class="mono">@surname</span> assignee (subtasks inherit it) · <span class="mono">#3</span> working days · <span class="mono">~6h</span> estimate · <span class="mono">!high</span> priority · <span class="mono">start:2026-12-01</span> <span class="mono">due:2026-12-18</span>.</li></ul></section>'}
+function personStats(uid0,pid){var mine=function(t){return (uid0===''?!t.assignee:t.assignee===uid0)&&(!pid||t.projectId===pid)};
+  var ts=leafTasks().filter(mine),all=S.tasks.filter(mine),a=0,ad=0,hb=0;
+  all.forEach(function(t){acts(t).forEach(function(c){a++;if(c.done)ad++})});
+  S.tasks.filter(function(t){return !pid||t.projectId===pid}).forEach(function(t){t.log.forEach(function(l){if(l.u===uid0)hb+=l.h})});
+  return {ts:ts,tasks:ts.length,done:ts.filter(function(t){return t.status==='Done'}).length,over:ts.filter(isOver).length,acts:a,actsDone:ad,est:ts.reduce(function(x,t){return x+t.est},0),hoursBy:hb}}
+function progRows(pid){var rows=S.users.map(function(u){return {u:u,s:personStats(u.id,pid)}});var un=personStats('',pid);rows.push({u:{id:'',name:'Unassigned',role:''},s:un});return rows.filter(function(r){return r.s.tasks||r.s.acts})}
+function wProg(){var rows=progRows('');return '<section class="card"><h2>Progress by person</h2>'+(rows.length?'<div class="lst">'+rows.map(function(r){var s0=r.s;return '<div><span style="min-width:90px">'+esc(r.u.name)+'</span><span class="grow" style="flex:1">'+pbar(s0.done,s0.tasks)+'</span><span class="mono small">'+s0.done+'/'+s0.tasks+(s0.acts?' · ☑ '+s0.actsDone+'/'+s0.acts:'')+'</span></div>'}).join('')+'</div><p style="margin:8px 0 0"><button class="btn sm" data-act="nav" data-v="progress">Open team progress</button></p>':'<p class="muted">No assigned tasks yet.</p>')+'</section>'}
+function taskLine(t,withActs){var par=t.parent&&T(t.parent),p=P(t.projectId);
+  return '<div class="pl"><div class="row" style="gap:8px;align-items:center"><input type="checkbox" data-ch="taskchk" data-id="'+t.id+'"'+(t.status==='Done'?' checked':'')+(canEdit(t)?'':' disabled')+' aria-label="Done"><button class="btn sm" data-act="open" data-id="'+t.id+'" style="text-align:left"><span'+(t.status==='Done'?' class="dn"':'')+'>'+(par?'<span class="muted">'+esc(par.title)+' › </span>':'')+esc(t.title)+'</span></button>'+chips(t)+flags(t)+'<span class="grow"></span><span class="small muted">'+pdot(p)+esc(p?p.name:'')+'</span><span class="mono small">'+fd(t.due)+'</span></div>'+
+   (withActs&&acts(t).length?'<div class="pa">'+acts(t).map(function(c){return '<label class="small"><input type="checkbox" data-ch="acttick" data-id="'+t.id+'" data-cid="'+esc(c.id)+'"'+(c.done?' checked':'')+(canEdit(t)?'':' disabled')+'> <span'+(c.done?' class="dn"':'')+'>'+esc(c.t)+'</span></label>'}).join('')+'</div>':'')+'</div>'}
+function vProgress(){var u=S.ui,pid=u.ppj&&P(u.ppj)?u.ppj:'',rows=progRows(pid);
+  var head='<div class="tools"><select data-ch="ppj" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),pid)+'</select><label class="small"><input type="checkbox" data-ch="pdone"'+(u.pdone?' checked':'')+'> show completed tasks</label><label class="small"><input type="checkbox" data-ch="pacts"'+(u.pacts!==0?' checked':'')+'> show activities</label></div>';
+  if(!rows.length)return head+'<section class="card"><p class="muted">No assigned tasks'+(pid?' in this project':'')+' yet. Add tasks and subtasks with <b>Quick add</b> on the Tasks page.</p></section>';
+  var tot=rows.reduce(function(a,r){return {t:a.t+r.s.tasks,d:a.d+r.s.done,a:a.a+r.s.acts,ad:a.ad+r.s.actsDone}},{t:0,d:0,a:0,ad:0});
+  var cell=function(d,n,none){return n?'<div class="mono">'+d+' / '+n+'</div>'+pbar(d,n):none};
+  var sum='<section class="card"><h2>Progress by person'+(pid?' — '+esc(P(pid).name):'')+'</h2><div class="tbw"><table class="tbl" style="min-width:560px"><thead><tr><th>Person</th><th>Tasks done</th><th>Activities done</th><th>Open</th><th>Overdue</th><th>Logged h</th><th>Est. h</th></tr></thead><tbody>'+
+   rows.map(function(r){var s0=r.s;return '<tr><td><b>'+esc(r.u.name)+'</b><br><span class="muted small">'+esc(r.u.role)+'</span></td><td style="min-width:110px">'+cell(s0.done,s0.tasks,'—')+'</td><td style="min-width:110px">'+cell(s0.actsDone,s0.acts,'—')+'</td><td class="mono">'+(s0.tasks-s0.done)+'</td><td class="mono">'+(s0.over?'<span class="flag bad">'+s0.over+'</span>':'0')+'</td><td class="mono" title="Hours logged by this person">'+nf(s0.hoursBy)+'</td><td class="mono" title="Estimated hours of the tasks assigned to this person">'+nf(s0.est)+'</td></tr>'}).join('')+
+   '<tr><td><b>Total</b></td><td>'+cell(tot.d,tot.t,'—')+'</td><td>'+cell(tot.ad,tot.a,'—')+'</td><td colspan="4"></td></tr></tbody></table></div>'
+   +'<p class="small muted" style="margin:8px 0 0">Tasks are counted at the lowest level: a task with subtasks is represented by its subtasks. Activities are the checklist items of the person’s tasks.</p></section>';
+  var cards=rows.map(function(r){var open=r.s.ts.filter(function(t){return t.status!=='Done'}).sort(function(a,b){return a.due<b.due?-1:1}),dn=r.s.ts.filter(function(t){return t.status==='Done'});
+    var list=open.concat(u.pdone?dn:[]);
+    return '<section class="card"><h2>'+esc(r.u.name)+' <span class="small muted">'+r.s.done+' of '+r.s.tasks+' tasks'+(r.s.acts?' · '+r.s.actsDone+' of '+r.s.acts+' activities':'')+'</span></h2>'+pbar(r.s.done,r.s.tasks)+
+     '<div class="lst" style="display:block;margin-top:8px">'+(list.length?list.map(function(t){return taskLine(t,u.pacts!==0)}).join(''):'<p class="muted small">Nothing open.</p>')+'</div></section>'}).join('');
+  return head+sum+'<div class="wgrid">'+cards+'</div>'}
+function actSec(t,ro){var a=acts(t);
+  return '<div class="sec"><h3>Activities ('+actDone(t)+'/'+a.length+')</h3>'+(a.length?pbar(actDone(t),a.length)+'<div class="lst small">'+a.map(function(c){return '<div><input type="checkbox" data-ch="acttick" data-id="'+t.id+'" data-cid="'+esc(c.id)+'"'+(c.done?' checked':'')+(ro?' disabled':'')+' aria-label="Done"><input class="grow'+(c.done?' dn':'')+'" style="flex:1;border:0;background:transparent" data-ch="acttxt" data-id="'+t.id+'" data-cid="'+esc(c.id)+'" value="'+esc(c.t)+'"'+(ro?' disabled':'')+'>'+(c.done&&c.by?'<span class="muted small">'+esc(uname(c.by))+'</span>':'')+(ro?'':'<button class="btn sm dng" data-act="actdel" data-id="'+t.id+'" data-cid="'+esc(c.id)+'" aria-label="Remove activity">✕</button>')+'</div>'}).join('')+'</div>':'<p class="small muted" style="margin:0 0 6px">No activities yet.</p>')+
+   (ro?'':'<input data-enter="actadd" data-id="'+t.id+'" placeholder="Add an activity and press Enter (paste several lines to add many)" style="width:100%;margin-top:6px">')+'</div>'}
+function subSec(t,ro){if(t.parent)return '';var k=kidsOf(t),dn=k.filter(function(x){return x.status==='Done'}).length;
+  return '<div class="sec"><h3>Subtasks ('+dn+'/'+k.length+')</h3>'+(k.length?pbar(dn,k.length)+'<div class="lst small">'+k.map(function(x){return '<div><span data-stop><input type="checkbox" data-ch="taskchk" data-id="'+x.id+'"'+(x.status==='Done'?' checked':'')+(canEdit(x)?'':' disabled')+' aria-label="Done"></span><button class="btn sm" data-act="open" data-id="'+x.id+'" style="text-align:left"><span'+(x.status==='Done'?' class="dn"':'')+'>'+esc(x.title)+'</span></button>'+chips(x)+'<span class="grow"></span><span class="muted">'+esc(uname(x.assignee))+' · '+fd(x.due)+'</span></div>'}).join('')+'</div>':'<p class="small muted" style="margin:0 0 6px">No subtasks.</p>')+
+   (ro?'':'<input data-enter="subadd" data-id="'+t.id+'" placeholder="Add a subtask and press Enter — e.g. Weigh samples @Rossi #1 ~2h" style="width:100%;margin-top:6px">')+'</div>'}
+function setDone(t,on){if(!canEdit(t)){toast('Your role cannot edit this task.');return false}
+  if(on){if(!applyStatus(t,'Done'))return false}else{t.status=logged(t)>0?'In progress':'To do';log('"'+t.title+'" reopened')}
+  if(on)kidsOf(t).forEach(function(k){k.status='Done'});if(t.parent){var par=T(t.parent);if(par)localRollup(par)}return true}
+function addActs(t,lines){var n=0;lines.forEach(function(l){var m=/^\s*(?:[-*•]|\[( |x|X)\])\s+(.*)$/.exec(l),dn=false,tx=l.trim();if(m){tx=(m[2]||'').trim();dn=m[1]==='x'||m[1]==='X';var mm=/^\[( |x|X)\]\s+(.*)$/.exec(tx);if(mm){tx=mm[2];dn=dn||mm[1]!==' '}}if(!tx||acts(t).length>=200)return;
+    t.checklist.push({id:uid('c'),t:tx.slice(0,300),done:dn,by:dn?S.me:null,at:dn?Date.now():null});n++});
+  if(n){log(n+' activit'+(n>1?'ies':'y')+' added to "'+t.title+'"');commit();setTimeout(function(){var i=document.querySelector('[data-enter="actadd"]');if(i)i.focus()},0)}}
 /* ---------- templates ---------- */
 var TP=function(id){return S.templates.find(function(t){return t.id===id})};
 /* create the steps of a template: mode 'none' (independent), 'after' (first steps wait for anchor), 'before' (anchor waits for the last steps) */
@@ -941,7 +1046,7 @@ function tplCard(t,pm){var sel=S.ui.tpl===t.id;
 function vTpl(){var pm=isPM();
   return (pm?'<div class="tools" style="margin-bottom:10px"><button class="btn pri" data-act="tplnew">New template</button><span class="small muted">Templates apply to a new or existing project (here) and to a single task (task panel → Add template steps).</span></div>':'')+
   '<div class="wgrid">'+(S.templates.length?S.templates.map(function(t){return tplCard(t,pm)}).join(''):'<p class="muted">No templates. '+(pm?'Create one with “New template”.':'')+'</p>')+'</div>'+
-  (isPM()?'<section class="card"><h2>Create tasks from a list</h2><div class="form"><label>Project<select id="bk-p">'+opt(pOpts(),S.ui.fp||(S.projects[0]&&S.projects[0].id))+'</select></label><label class="full">One task per line. Options: <span class="mono">@surname</span> assigns, <span class="mono">#3</span> duration in days, <span class="mono">~6h</span> estimated hours<textarea id="bk-t" rows="5" placeholder="Weigh samples @Bianchi #1 ~3h&#10;FTIR on 8 films @Neri #2 ~6h"></textarea></label><label class="full"><button class="btn pri" data-act="bulk" style="width:max-content">Create tasks</button></label></div></section>':'')}
+  (isPM()?'<section class="card"><h2>Many tasks at once</h2><p class="muted" style="margin:0 0 8px">Type or paste projects, tasks, subtasks and activities as an outline.</p><button class="btn pri" data-act="qaopen">Open Quick add</button></section>':'')}
 /* ---------- settings ---------- */
 function vSet(){var ad=isAdmin(),json='';
   var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?(MODE==='folder'?'':'<button class="btn sm" data-act="userpw" data-id="'+u.id+'">Reset password</button> ')+'<button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
@@ -958,7 +1063,7 @@ function vSet(){var ad=isAdmin(),json='';
 
 /* ---------- info and license ---------- */
 function vInfo(){
-  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>2.0.0-beta.3</dd><dt>License</dt><dd>Apache License 2.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
+  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>2.0.0-beta.4</dd><dt>License</dt><dd>Apache License 2.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
    '<dt>Purpose</dt><dd>Project, task, resource and request management in a chemical/polymer laboratory, with the typical features of Asana and monday.com.</dd>'+
    '<dt>Method</dt><dd>Vanilla JavaScript client for the LabPM server (SQLite, SSE live updates); finish-to-start date cascade on working days; workload = remaining hours spread over working days; data shared through the server; full export/import as JSON.</dd>'+
    '<dt>Disclaimer</dt><dd>validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.</dd>'+
@@ -987,7 +1092,7 @@ function renderDrawer(){
   var el=$('#drawer'),t=S.ui.drawer&&T(S.ui.drawer);
   if(!t){el.innerHTML='';return}
   var old=$('#drpanel'),sc=old?old.scrollTop:0,ro=!canEdit(t),dis=ro?' disabled':'',p=P(t.projectId);
-  var cands=S.tasks.filter(function(x){return x.id!==t.id&&!dependsOn(x.id,t.id)});
+  var cands=S.tasks.filter(function(x){return x.id!==t.id&&!dependsOn(x.id,t.id)&&x.id!==t.parent&&x.parent!==t.id});
   var succ=S.tasks.filter(function(x){return x.deps.indexOf(t.id)>=0});
   var docs=S.docs.filter(function(d){return d.taskId===t.id});
   var cf=S.fields.map(function(f){var v=t.cf[f.id],n='cf:'+f.id,lab='<label>'+esc(f.name);
@@ -997,9 +1102,9 @@ function renderDrawer(){
     return lab+'<input type="'+(f.type==='number'?'number':f.type==='date'?'date':'text')+'" data-ch="dr" data-f="'+n+'" value="'+esc(v==null?'':v)+'"'+dis+'></label>'}).join('');
   var running=t.timer;
   el.innerHTML='<div class="ov" data-act="closeov"><div class="dr" id="drpanel" role="dialog" aria-label="Task detail"><div class="row"><h2 class="grow">'+pdot(p)+esc(t.title)+'</h2><button class="btn sm" data-act="close">Close</button></div>'+
-   '<div class="row small">'+st(t.status)+flags(t)+(ro?'<span class="muted">read-only for your role</span>':'')+'</div>'+
+   '<div class="row small">'+st(t.status)+flags(t)+(t.parent&&T(t.parent)?'<span class="muted">Subtask of <a href="#" data-act="open" data-id="'+t.parent+'">'+esc(T(t.parent).title)+'</a></span>':'')+(ro?'<span class="muted">read-only for your role</span>':'')+'</div>'+
    '<div class="form"><label class="full">Title<input data-ch="dr" data-f="title" value="'+esc(t.title)+'"'+dis+'></label>'+
-   '<label>Project<select data-ch="dr" data-f="project"'+dis+'>'+opt(pOpts(),t.projectId)+'</select></label>'+
+   '<label>Project<select data-ch="dr" data-f="project"'+(t.parent?' disabled':dis)+'>'+opt(pOpts(),t.projectId)+'</select></label>'+
    '<label>Status<select data-ch="dr" data-f="status"'+dis+'>'+opt(STATUSES,t.status)+'</select></label>'+
    '<label>Assignee<select data-ch="dr" data-f="assignee"'+(isPM()?'':' disabled')+'>'+opt(uOpts(),t.assignee||'')+'</select></label>'+
    '<label>Priority<select data-ch="dr" data-f="priority"'+dis+'>'+opt(PRIOS,t.priority)+'</select></label>'+
@@ -1008,6 +1113,7 @@ function renderDrawer(){
    '<label>Estimated hours<input type="number" min="0" step="0.5" data-ch="dr" data-f="est" value="'+t.est+'"'+dis+'></label>'+
    '<label>Tags (comma-separated)<input data-ch="dr" data-f="tags" value="'+esc(t.tags.join(', '))+'"'+dis+'></label></div>'+
    (cf?'<div class="sec"><h3>Custom fields</h3><div class="form">'+cf+'</div></div>':'')+
+   actSec(t,ro)+subSec(t,ro)+
    '<div class="sec"><h3>Dependencies (finish-to-start)</h3><div class="chk">'+(cands.map(function(x){return '<label><input type="checkbox" data-ch="dr" data-f="dep:'+x.id+'"'+(t.deps.indexOf(x.id)>=0?' checked':'')+dis+'><span>'+esc(x.title)+' <span class="muted small">'+esc((P(x.projectId)||{}).name||'')+'</span></span></label>'}).join('')||'<span class="muted">No other tasks.</span>')+'</div>'+
    (isBlocked(t)?'<div class="small"><span class="flag warn">blocked by</span> '+blockers(t).map(function(b){return esc(b.title)}).join('; ')+'</div>':'')+
    (succ.length?'<div class="small muted">Unblocks: '+succ.map(function(x){return esc(x.title)}).join('; ')+'. If you move the due date, these tasks shift in cascade.</div>':'')+'</div>'+
@@ -1018,7 +1124,7 @@ function renderDrawer(){
    attSec(t,ro)+
    '<div class="sec"><h3>Notes</h3><textarea rows="3" data-ch="dr" data-f="notes"'+dis+'>'+esc(t.notes)+'</textarea></div>'+
    '<div class="sec"><h3>Documents</h3>'+(docs.map(function(d){return '<div><a href="#" data-act="docsel" data-id="'+d.id+'" data-go="1">'+esc(d.title)+'</a></div>'}).join('')||'<span class="muted small">No linked documents.</span>')+(isPM()||role()==='Researcher'?'<button class="btn sm" data-act="docnew" data-task="'+t.id+'" style="width:max-content">New document for this task</button>':'')+'</div>'+
-   (isPM()?'<div class="sec"><button class="btn dng" data-act="'+(S.ui.confirmDel===t.id?'deltask2':'deltask')+'" data-id="'+t.id+'" style="width:max-content">'+(S.ui.confirmDel===t.id?'Confirm deletion':'Delete task')+'</button></div>':'')+
+   (canDelTask(t)?'<div class="sec"><button class="btn dng" data-act="'+(S.ui.confirmDel===t.id?'deltask2':'deltask')+'" data-id="'+t.id+'" style="width:max-content">'+(S.ui.confirmDel===t.id?'Confirm deletion':'Delete task')+'</button></div>':'')+
    '</div></div>';
   var np=$('#drpanel');if(np)np.scrollTop=sc}
 
@@ -1048,12 +1154,12 @@ function xSheet(rows,widths,filter){var out='<?xml version="1.0" encoding="UTF-8
   rows.forEach(function(r,ri){out+='<row r="'+(ri+1)+'">'+r.map(function(c,i){return xCell(c,ri+1,i,filter&&ri===0)}).join('')+'</row>'});
   out+='</sheetData>'+(filter&&rows.length?'<autoFilter ref="A1:'+colN(rows[0].length-1)+rows.length+'"/>':'')+'</worksheet>';return out}
 function buildXlsx(tasks,info){
-  var cfs=S.fields,hd=['Title','Project','Status','Assignee','Priority','Start','Due','Estimated h','Logged h','Overdue','Blocked','Depends on','Tags'].concat(cfs.map(function(f){return f.name}),['Requester','Notes','Attachments']);
+  var cfs=S.fields,hd=['Title','Project','Status','Assignee','Priority','Start','Due','Estimated h','Logged h','Overdue','Blocked','Depends on','Tags','Parent','Activities'].concat(cfs.map(function(f){return f.name}),['Requester','Notes','Attachments']);
   var rows=[hd];
   tasks.forEach(function(t){var p=P(t.projectId);
     var cv=cfs.map(function(f){if(f.type==='formula'){var r=calc(t,f);return r==null?null:{n:r}}var v=t.cf[f.id];if(v==null||v==='')return null;if(f.type==='number')return isFinite(parseFloat(v))?{n:parseFloat(v)}:String(v);if(f.type==='date')return DT.test(String(v))?{d:v}:String(v);if(f.type==='checkbox')return v?'Yes':'No';return String(v)});
-    rows.push([t.title,p?p.name:'',t.status,t.assignee?uname(t.assignee):'',t.priority,{d:t.start},{d:t.due},{n:t.est},{n:Math.round(logged(t)*100)/100},isOver(t)?'Yes':'No',isBlocked(t)&&t.status!=='Done'?'Yes':'No',t.deps.map(function(d){var x=T(d);return x?x.title:''}).filter(Boolean).join('; '),t.tags.join(', ')].concat(cv,[t.requester||'',t.notes||'',S.files.filter(function(f){return f.taskId===t.id}).map(function(f){return f.name}).join('; ')]))});
-  var w=[38,30,13,14,10,12,12,12,10,9,9,34,18].concat(cfs.map(function(){return 16}),[16,40,36]);
+    rows.push([t.title,p?p.name:'',t.status,t.assignee?uname(t.assignee):'',t.priority,{d:t.start},{d:t.due},{n:t.est},{n:Math.round(logged(t)*100)/100},isOver(t)?'Yes':'No',isBlocked(t)&&t.status!=='Done'?'Yes':'No',t.deps.map(function(d){var x=T(d);return x?x.title:''}).filter(Boolean).join('; '),t.tags.join(', '),(t.parent&&T(t.parent)?T(t.parent).title:''),acts(t).length?actDone(t)+'/'+acts(t).length:''].concat(cv,[t.requester||'',t.notes||'',S.files.filter(function(f){return f.taskId===t.id}).map(function(f){return f.name}).join('; ')]))});
+  var w=[38,30,13,14,10,12,12,12,10,9,9,34,18,28,12].concat(cfs.map(function(){return 16}),[16,40,36]);
   var ws1=xSheet(rows,w,true),ws2=xSheet(info,[26,60],false),X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   var ns='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
   return zipStore([
@@ -1134,7 +1240,7 @@ var A={
  addlog:function(e){var t=T(e.dataset.id),h=parseFloat($('#lg-h').value);if(!t||!canEdit(t))return;if(!(h>0)){toast('Enter hours (greater than zero).');return}t.log.push({id:uid('l'),u:S.me,date:TODAY(),h:h,note:$('#lg-n').value.trim()});log('Hours on "'+t.title+'": '+nf(h,2));commit()},
  dellog:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;t.log=t.log.filter(function(l){return l.id!==e.dataset.lid});commit()},
  deltask:function(e){S.ui.confirmDel=e.dataset.id;renderDrawer()},
- deltask2:function(e){var id=e.dataset.id,t=T(id);if(!t||!isPM())return;S.tasks=S.tasks.filter(function(x){return x.id!==id});S.tasks.forEach(function(x){x.deps=x.deps.filter(function(d){return d!==id})});log('Deleted "'+t.title+'"');S.ui.drawer=null;S.ui.confirmDel=null;commit()},
+ deltask2:function(e){var id=e.dataset.id,t=T(id);if(!t||!canDelTask(t))return;var par=t.parent&&T(t.parent);S.tasks=S.tasks.filter(function(x){return x.id!==id&&x.parent!==id});if(par)localRollup(par);S.tasks.forEach(function(x){x.deps=x.deps.filter(function(d){return d!==id})});log('Deleted "'+t.title+'"');S.ui.drawer=null;S.ui.confirmDel=null;commit()},
  docsel:function(e,ev){if(ev)ev.preventDefault();S.ui.doc=e.dataset.id;if(e.dataset.go){S.ui.view='docs';S.ui.drawer=null;save();render();renderDrawer()}else{save();renderBody()}},
  docnew:function(e){var d={id:uid('d'),title:'New document',projectId:'',taskId:e.dataset.task||'',updated:Date.now(),body:'# Title\n\n'};if(d.taskId){var t=T(d.taskId);d.projectId=t.projectId;d.title='Notes: '+t.title}S.docs.push(d);S.ui.doc=d.id;S.ui.view='docs';S.ui.drawer=null;log('Nuovo documento "'+d.title+'"');save();render();renderDrawer()},
  docdel:function(e){S.docs=S.docs.filter(function(d){return d.id!==e.dataset.id});S.ui.doc=null;save();renderBody()},
@@ -1154,6 +1260,31 @@ var A={
   S.rules.push({id:uid('r'),name:b.name.trim(),on:true,trigger:{type:b.tt,value:b.tt==='status_to'?b.tv:''},cond:{type:b.ct,value:b.ct==='none'?'':b.cv},action:{type:b.at,value:b.av}});
   S.ui.rb=defaultUI().rb;log('New rule "'+b.name+'"');save();renderBody()},
  ruledel:function(e){S.rules=S.rules.filter(function(r){return r.id!==e.dataset.id});save();renderBody()},
+ qa:function(){S.ui.qa=!S.ui.qa;save();renderBody()},
+ qaopen:function(){S.ui.qa=true;S.ui.view='tasks';S.ui.tview='list';save();render()},
+ qacreate:function(){if(!isPM()){toast('Your role cannot create projects and tasks.');return}
+  var items=parseOutline($('#qa-t').value),pname=$('#qa-p').value.trim(),base=$('#qa-d').value||TODAY();
+  if(!items.some(function(i){return i.k==='task'||i.k==='sub'||i.k==='act'})){toast('Write at least one task line.');return}
+  var need=!pname,bad='';items.forEach(function(i){if(i.k==='project')need=false;else if(need&&!bad&&(i.k==='task'||i.k==='sub'||i.k==='act'))bad=i.q?i.q.title:i.t});
+  if(bad){toast('Name the project first (field above or a “# Project” line).');return}
+  var cur=null,nP=0,nT=0,nS=0,nA=0,warn=0,lastP=null;
+  var ensure=function(name){var pr=S.projects.find(function(x){return x.name.toLowerCase()===name.toLowerCase()});if(!pr){pr={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(pr);nP++}return pr};
+  if(pname)cur=ensure(pname);
+  items.forEach(function(i){
+    if(i.k==='project'){cur=ensure(i.name);return}
+    if(i.k==='warn'){warn++;return}
+    if(i.k==='task'){i.task=mkTaskQuick(i.q,cur.id,null,base);nT++}
+    else if(i.k==='sub'){i.task=mkTaskQuick(i.q,cur.id,i.parent.task,base);nS++}
+    else if(i.k==='act'){var tt=i.of.task;if(tt.checklist.length<200){tt.checklist.push({id:uid('c'),t:i.t,done:i.done,by:i.done?S.me:null,at:i.done?Date.now():null});nA++}}
+    if(cur)lastP=cur});
+  items.forEach(function(i){if(i.k==='task'&&hasKids(i.task))localRollup(i.task)});
+  log('Quick add: '+nP+' projects, '+nT+' tasks, '+nS+' subtasks, '+nA+' activities');
+  S.ui.qa=false;if(lastP)S.ui.fp=lastP.id;S.ui.tview='list';S.ui.view='tasks';save();render();
+  toast('Created '+(nP?nP+' project(s), ':'')+nT+' task(s), '+nS+' subtask(s), '+nA+' activit'+(nA===1?'y':'ies')+(warn?' ('+warn+' activity line(s) without a task skipped)':'')+'.')},
+ actdel:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;t.checklist=acts(t).filter(function(c){return c.id!==e.dataset.cid});commit()},
+ actadd:function(inp){var t=T(inp.dataset.id);if(!t||!canEdit(t))return;var v=inp.value;inp.value='';addActs(t,[v])},
+ subadd:function(inp){var t=T(inp.dataset.id);if(!t||t.parent||!canEdit(t))return;var q=parseQuick(inp.value.trim());if(!q.title)return;if(q.badUser)toast('No person matches “@'+q.badUser+'”.');
+  if(role()==='Researcher')q.assignee=S.me;var k=mkTaskQuick(q,t.projectId,t,t.start);localRollup(t);log('Subtask "'+k.title+'" added to "'+t.title+'"');inp.value='';commit();setTimeout(function(){var i=document.querySelector('[data-enter="subadd"]');if(i)i.focus()},0)},
  tplsel:function(e){S.ui.tpl=e.dataset.id||null;renderBody()},
  tplcreate:function(e){var tp=TP(e.dataset.id),target=$('#tp-t').value,start=$('#tp-d').value||TODAY(),p;if(!tp||!isPM())return;
   if(target){p=P(target);if(!p){toast('Project not found.');return}}else{var name=$('#tp-n').value.trim();if(!name){toast('Enter the project name.');return}p={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(p)}
@@ -1168,10 +1299,6 @@ var A={
  tplstepadd:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;if(t.tasks.length>=60){toast('A template can have at most 60 steps.');return}t.tasks.push({t:'Step '+(t.tasks.length+1),d:1,est:1});save();renderBody()},
  tplstepdel:function(e){var t=TP(e.dataset.id),j=+e.dataset.i;if(!t||!isPM())return;if(t.tasks.length<=1){toast('A template needs at least one step.');return}
   t.tasks.splice(j,1);t.tasks.forEach(function(x){if(x.after){x.after=x.after.filter(function(k){return k!==j}).map(function(k){return k>j?k-1:k});if(!x.after.length)delete x.after}});save();renderBody()},
- bulk:function(){var pid=$('#bk-p').value;if(!pid){toast('Create a project first.');return}var lines=$('#bk-t').value.split('\n').map(function(l){return l.trim()}).filter(Boolean);if(!lines.length){toast('Write at least one line.');return}
-  lines.forEach(function(l){var as=/@(\S+)/.exec(l),d=/#(\d+)/.exec(l),h=/~(\d+(?:[.,]\d+)?)h/.exec(l),u=as&&S.users.find(function(x){return x.name.toLowerCase().indexOf(as[1].toLowerCase())>=0});
-   var s=normWD(TODAY()),t=newTask({projectId:pid,title:l.replace(/[@#~]\S+/g,'').replace(/\s+/g,' ').trim()||l,assignee:u?u.id:null,start:s,due:addWD(s,Math.max((d?parseInt(d[1],10):2)-1,0)),est:h?parseFloat(h[1].replace(',','.')):0})});
-  log('Created '+lines.length+' tasks from list');toast(lines.length+' tasks created.');S.ui.fp=pid;S.ui.tview='list';S.ui.view='tasks';save();render()},
  fieldadd:function(){var n=$('#nf-n').value.trim(),ty=$('#nf-t').value,x=$('#nf-x').value.trim();if(!n){toast('Enter the field name.');return}if(ty==='formula'&&!x){toast('Write the formula.');return}
   var f={id:uid('f'),name:n,type:ty};if(ty==='select')f.options=x?x.split(',').map(function(s){return s.trim()}).filter(Boolean):['A','B'];if(ty==='formula')f.formula=x;S.fields.push(f);log('New field "'+n+'"');save();renderBody()},
  fielddel:function(e){S.fields=S.fields.filter(function(f){return f.id!==e.dataset.id});save();renderBody()},
@@ -1191,6 +1318,11 @@ var A={
  copyjson:function(){download(JSON.stringify(S),'JSON backup')}
 };
 var H={
+ taskchk:function(e){var t=T(e.dataset.id);if(!t)return;if(!setDone(t,e.checked)){e.checked=!e.checked;return}commit()},
+ acttick:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t)){e.checked=!e.checked;toast('Your role cannot edit this task.');return}var c=acts(t).find(function(x){return x.id===e.dataset.cid});if(!c)return;
+  c.done=e.checked;c.by=e.checked?S.me:null;c.at=e.checked?Date.now():null;log('Activity "'+c.t+'" '+(c.done?'done':'reopened'));commit()},
+ acttxt:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;var c=acts(t).find(function(x){return x.id===e.dataset.cid});if(!c)return;var v=e.value.trim().slice(0,300);if(v)c.t=v;else e.value=c.t;save()},
+ ppj:function(e){S.ui.ppj=e.value;save();renderBody()},pdone:function(e){S.ui.pdone=e.checked;save();renderBody()},pacts:function(e){S.ui.pacts=e.checked?1:0;save();renderBody()},
  tpf:function(e){var t=TP(e.dataset.id),f=e.dataset.f;if(!t||!isPM()||(f!=='name'&&f!=='desc'))return;t[f]=e.value.trim().slice(0,f==='name'?120:500);if(!t.name)t.name='Template';save();renderBody()},
  tps:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;var i=+e.dataset.i,x=t.tasks[i],f=e.dataset.f,v=e.value;if(!x)return;
   if(f==='t')x.t=v.trim().slice(0,300)||('Step '+(i+1));
@@ -1223,7 +1355,7 @@ var H={
  ucap:function(e){var u=Uu(e.dataset.id);if(u&&isAdmin()){u.cap=Math.max(0,parseFloat(e.value)||0);save()}},
  dr:function(e){var t=T(S.ui.drawer);if(!t||!canEdit(t))return;var f=e.dataset.f,v=e.value,msg='';
   if(f==='title'){t.title=v.trim()||t.title}
-  else if(f==='project'){t.projectId=v}
+  else if(f==='project'){t.projectId=v;kidsOf(t).forEach(function(k){k.projectId=v})}
   else if(f==='status'){applyStatus(t,v)}
   else if(f==='assignee'){if(isPM())t.assignee=v||null}
   else if(f==='priority'){t.priority=v}
@@ -1237,14 +1369,15 @@ var H={
 };
 
 /* ---------- events ---------- */
-document.addEventListener('click',function(ev){var e=ev.target.closest('[data-act]');if(!e)return;var a=A[e.dataset.act];if(a){if(e.tagName==='A')ev.preventDefault();a(e,ev)}});
+document.addEventListener('click',function(ev){if(ev.target.closest('[data-stop]'))return;var e=ev.target.closest('[data-act]');if(!e)return;var a=A[e.dataset.act];if(a){if(e.tagName==='A')ev.preventDefault();a(e,ev)}});
 document.addEventListener('change',function(ev){var e=ev.target.closest('[data-ch]');if(!e)return;var h=H[e.dataset.ch];if(h)h(e)});
 document.addEventListener('input',function(ev){var e=ev.target;if(e.matches&&e.matches('[data-in="q"]')){S.ui.q=e.value;$('#tv').innerHTML=tv();var n=$('#xln');if(n)n.textContent=filtered().length;save();return}
   /* autosave every keystroke in free-text fields (state only; no re-render, so focus is kept) */
   var c=e.dataset&&e.dataset.ch,f=e.dataset&&e.dataset.f;
   if(c==='dr'&&f==='notes'){var t=T(S.ui.drawer);if(t&&canEdit(t)){t.notes=e.value;save()}}
   else if(c==='docf'&&(f==='body'||f==='title')){var d=S.docs.find(function(x){return x.id===S.ui.doc});if(d&&(isPM()||role()==='Researcher')){d[f]=e.value;d.updated=Date.now();save()}}});
-document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&S.ui.drawer)A.close()});
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&S&&S.ui.drawer)A.close();var el=ev.target;if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing&&el&&el.dataset&&el.dataset.enter&&A[el.dataset.enter]){ev.preventDefault();A[el.dataset.enter](el)}});
+document.addEventListener('paste',function(ev){var el=ev.target;if(!el||!el.dataset||el.dataset.enter!=='actadd'||!S)return;var tx=(ev.clipboardData||window.clipboardData).getData('text');if(/\n/.test(tx.trim())){ev.preventDefault();var t=T(el.dataset.id);if(t&&canEdit(t))addActs(t,tx.split(/\r?\n/))}});
 document.addEventListener('dragstart',function(ev){var e=ev.target.closest('[data-drag]');if(e){try{ev.dataTransfer.setData('text/plain',e.dataset.drag);ev.dataTransfer.effectAllowed='move'}catch(x){}}});
 document.addEventListener('dragover',function(ev){var c=ev.target.closest('[data-drop]');if(c){ev.preventDefault();c.classList.add('over')}});
 document.addEventListener('dragleave',function(ev){var c=ev.target.closest('[data-drop]');if(c)c.classList.remove('over')});

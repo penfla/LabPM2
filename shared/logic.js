@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Server-side date cascade, automations, overdue sweep and timer stop (moved from the v1.3 client)
@@ -103,13 +103,38 @@ Engine.prototype.fire = function (tr, t, depth) {
     else if (a.type === 'notify') self.notices.push({ rule: r.id, text: a.value + ' ("' + t.title + '")' });
   });
 };
+/* subtasks: a parent's dates span its subtasks; its status follows them (all Done -> Done, any started -> In progress) */
+Engine.prototype.kids = function (pid) { return this.tasks.filter(function (x) { return x.parent === pid; }); };
+Engine.prototype.rollup = function (pid) {
+  var p = this.byId[pid];
+  if (!p) return;
+  var kids = this.kids(pid);
+  if (!kids.length) return;
+  var start = kids.reduce(function (a, k) { return k.start < a ? k.start : a; }, kids[0].start);
+  var due = kids.reduce(function (a, k) { return k.due > a ? k.due : a; }, kids[0].due);
+  if (p.start !== start || p.due !== due) { p.start = start; p.due = due; p.ovFired = false; this.touch(p); this.cascadeFrom(p); }
+  var all = kids.every(function (k) { return k.status === 'Done'; });
+  var started = kids.some(function (k) { return k.status !== 'To do' && k.status !== 'Triage'; });
+  var st = p.status;
+  if (all) st = 'Done';
+  else if (p.status === 'Done') st = 'In progress';
+  else if (started && (p.status === 'To do' || p.status === 'Triage')) st = 'In progress';
+  if (st !== p.status) { p.status = st; this.touch(p); this.statusChanged(p, 0); }
+};
+/* closing a parent closes its open subtasks */
+Engine.prototype.closeKids = function (t) {
+  var self = this;
+  this.kids(t.id).forEach(function (k) { if (k.status !== 'Done') { k.status = 'Done'; self.touch(k); self.statusChanged(k, 0); } });
+};
 /* prev: task before the change (null if created); t: task after (already in the list) */
 Engine.prototype.update = function (prev, t) {
-  if (!prev) { this.fire({ type: 'created' }, t, 0); return; }
-  if (prev.status !== t.status) this.statusChanged(t, 0);
+  if (!prev) { this.fire({ type: 'created' }, t, 0); if (t.parent) this.rollup(t.parent); return; }
+  if (prev.status !== t.status) { this.statusChanged(t, 0); if (t.status === 'Done') this.closeKids(t); }
   if (prev.start !== t.start || prev.due !== t.due) { t.ovFired = false; this.touch(t); this.cascadeFrom(t); }
   var self = this;
   t.deps.filter(function (d) { return prev.deps.indexOf(d) < 0; }).forEach(function (d) { if (self.byId[d]) self.cascadeFrom(self.byId[d]); });
+  if (t.parent) this.rollup(t.parent);
+  if (prev.parent && prev.parent !== t.parent) this.rollup(prev.parent);
 };
 Engine.prototype.checkOverdue = function () {
   var self = this;

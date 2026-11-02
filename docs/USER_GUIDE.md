@@ -1,6 +1,6 @@
 # User guide
 
-Applies to LabPM 2.0.0-beta.3. Source: https://github.com/penfla/LabPM2
+Applies to LabPM 2.0.0-beta.4. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
@@ -24,11 +24,11 @@ Widgets can be toggled under *Visible widgets* (preference is saved).
 
 ## 3. Tasks
 
-Toolbar: view switch, search (title + tags), filters (project, assignee, status, priority, due-date range *from / to*), *Clear filters*, grouping (List only), **Export Excel (n)**, **+ Task** (PM/Admin). Filters apply to all five views and persist across reloads.
+Toolbar: view switch, **Quick add** (PM/Admin, §3c), search (title + tags), filters (project, assignee, status, priority, due-date range *from / to*), *Clear filters*, grouping (List only), **Export Excel (n)**, **+ Task** (PM/Admin). Filters apply to all five views and persist across reloads.
 
 | View | Notes |
 |---|---|
-| List | No column sorting; optional grouping (status, project, person, priority). Custom fields appear as extra columns. Click a row to open the detail drawer |
+| List | First column is a **tick box** (done / not done); subtasks are indented under their task with chips for subtasks and activities done. No column sorting; optional grouping (status, project, person, priority). Custom fields appear as extra columns. Click a row to open the detail drawer |
 | Board | One column per status. Drag a card to change status (blocked tasks refuse *In progress / In review / Done*) |
 | Timeline | Bars = start→due on working-day grid; dark fill = logged / estimated; arrows = dependencies; red line = today |
 | Calendar | Month grid, cards on due date (max 3 per day + counter) |
@@ -47,6 +47,8 @@ Toolbar: view switch, search (title + tags), filters (project, assignee, status,
 
 Title, project, status, assignee (PM/Admin only), priority, start, due, estimated hours, tags, custom fields, dependencies, time tracking, notes, linked documents, delete (two-step confirm).
 
+- **Activities (checklist).** Small things to do inside the task. Tick the box when done (it records who and when), type in the last field and press **Enter** to add one (paste several lines to add many), ✕ removes. The task keeps its own status: activities do not close it.
+- **Subtasks.** A task can have subtasks (one level). Tick a subtask to mark it Done; add one by typing in the last field and pressing **Enter** (`Weigh samples @Rossi #1 ~2h` — same options as Quick add; without `@` it takes the assignee of the task). A subtask belongs to the project of its task and can have its own activities, dependencies, hours and files. The **task with subtasks follows them automatically**: its dates span its subtasks, it becomes *In progress* when one starts and *Done* when all are Done (and goes back to *In progress* if one is reopened). Marking the task itself Done closes its open subtasks. Deleting it deletes its subtasks.
 - **Dependencies (finish-to-start).** Tick predecessors. Circular links are prevented (candidates exclude tasks that already depend on the current one).
 - **Cascade.** Changing a due date or adding a predecessor moves every non-Done successor whose start ≤ predecessor due: new start = next working day after the predecessor due, duration (in working days) preserved, recursively. A toast reports how many tasks moved.
 - **Attachments.** Add one or more files from the drawer (needs a connected backup folder, see §11). Each file is copied to `<folder>/attachments/task-<title>-<id>/`; *Open* shows it in a new tab (falls back to download), *Save copy* downloads it, *Remove* drops the link only. Researchers can attach to their own tasks; PM/Admin to any; Viewer cannot.
@@ -99,22 +101,37 @@ A template is a named list of steps: title, duration in working days, estimated 
 
 Standards: https://www.astm.org · https://www.iso.org. Templates only cite the standard number; verify method parameters against the current edition.
 
-### Bulk task entry
+## 3c. Quick add, ticking and team progress
 
-Templates → *Create tasks from a list*, one task per line:
+**Quick add** (Tasks page → *Quick add*, Admin / Project manager) creates projects, tasks, subtasks and activities in one go from an outline. Fill the project name (an existing one is reused, a new name creates it) and a start date, then type or paste:
 
 ```
-Weigh samples @Bianchi #1 ~3h
-FTIR on 8 films @Neri #2 ~6h
+# DSC campaign
+Prepare samples @Rossi #2 ~6h !high
+  Weigh 8 specimens #1 ~2h
+  Condition 48 h #2
+  - Check balance calibration
+Run DSC @Rossi #3 ~12h due:2026-12-18
+  - [x] Label vials
 ```
 
-| Token | Meaning | Default |
-|---|---|---|
-| `@name` | Assignee: first user whose name contains the text (case-insensitive) | unassigned |
-| `#N` | Duration in working days | 2 |
-| `~Nh` | Estimated hours (`~1.5h` or `~1,5h`) | 0 |
+| Line | Result |
+|---|---|
+| `# Name` | starts / selects a project (several allowed; optional if the Project field is filled) |
+| normal line | a **task** |
+| indented line under a task | a **subtask** (the task then spans its subtasks) |
+| `- text`, `* text`, `[ ] text` | an **activity** of the task or subtask above (`[x]` = already done) |
+| `@name` | assignee: first user whose name contains the text; subtasks inherit the task’s assignee |
+| `#N` | duration in working days (default 1) |
+| `~Nh` | estimated hours (`~1.5h` or `~1,5h`) |
+| `!low` `!med` `!high` `!crit` | priority (default Medium) |
+| `start:YYYY-MM-DD` `due:YYYY-MM-DD` | explicit dates |
 
-Tokens are removed from the title. Tasks start today (next working day if weekend).
+Tokens are removed from the title. Without `start:` tasks begin on the start date (next working day if weekend). Nothing is created when a line cannot be placed (for example a task before any project name), and activity lines without a task are skipped and counted in the message. Other ways to enter work: *+ Task* for a single task, *Add subtask* / *Add an activity* in the task panel (Researchers can do this on their own tasks), Templates (§6).
+
+**Ticking done.** Tick a task or subtask in the list, in the task panel or in *Team progress*; tick activities in the task panel or in *Team progress*. Ticking is allowed to Admin, Project manager and to the assignee; Viewers cannot.
+
+**Team progress** (Work → Team progress) shows, per person and optionally per project: tasks done / total, activities done / total, open and overdue tasks, hours logged by the person and hours estimated for the tasks assigned to them, with a progress bar each, followed by one card per person listing their open tasks (completed ones on request) with tick boxes and activities. Counting rule: **tasks are counted at the lowest level** — a task with subtasks is represented by its subtasks, so work is never counted twice; the same rule applies to the dashboard indicators, hours per project, workload and project progress. A dashboard widget *Progress by person* summarises the same figures.
 
 ## 7. Automations
 
@@ -162,7 +179,8 @@ Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, ba
 |---|:-:|:-:|:-:|:-:|
 | View everything | ✓ | ✓ | ✓ | ✓ |
 | Create / delete tasks, change assignee | ✓ | ✓ | – | – |
-| Edit task fields, timer, hours | ✓ | ✓ | own tasks | – |
+| Edit task fields, timer, hours, tick activities / subtasks | ✓ | ✓ | own tasks | – |
+| Add subtasks and activities | ✓ | ✓ | on own tasks (subtask assigned to themselves) | – |
 | Projects, goals, templates, bulk entry, fields, rules | ✓ | ✓ | – | – |
 | Accept requests | ✓ | ✓ | – | – |
 | Submit requests | ✓ | ✓ | ✓ | – |
@@ -170,7 +188,7 @@ Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, ba
 | Users & accounts, import / export, backups and restore, clear data | ✓ | – | – | – |
 | Attach files | ✓ | ✓ | own tasks | – |
 
-Roles are enforced by the server on every request (see [SECURITY.md](../SECURITY.md)). A Researcher may change status, notes, estimate, tags, custom fields, hours, timer and priority on own tasks, not title, dates, project or assignee.
+Roles are enforced by the server on every request (see [SECURITY.md](../SECURITY.md)). A Researcher may change status, notes, estimate, tags, custom fields, hours, timer, priority and activities on own tasks, not title, dates, project or assignee (on a *subtask* assigned to them also title and dates); they can add subtasks under their own tasks (assigned to themselves) and delete those.
 
 ## 11. Data, sync and backups
 

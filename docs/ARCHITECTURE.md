@@ -1,6 +1,6 @@
 # LabPM v2 — architecture (alpha)
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.3 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
+Author: Flavio Pendolino · Version: 2.0.0-beta.4 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 Purpose: central multi-user server for LabPM (option C). Method: Node.js built-ins + SQLite. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:sqlite`, `node:crypto`). Reference baseline: https://github.com/penfla/LabPM (v1.3.0).
@@ -29,7 +29,9 @@ Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:s
 | `GET /api/audit` | Admin, PM | who/what/when |
 | `GET /api/export`, `POST /api/import` | Admin | v1 JSON; imported users have no login; imported Admins become Viewer; timers dropped |
 
-Researcher on own tasks may change: `status notes est tags cf log timer priority`; may submit intake requests (`src:"form"`, `Triage`).
+Subtasks: `tasks.parent` (one level; the server forces the parent's project, rejects nesting and cycles, moves subtasks with their parent and deletes them with it). `Engine.rollup` (shared) keeps a parent's dates and status in step with its subtasks inside the same transaction; closing a parent closes its open subtasks. Aggregates in the client (progress, KPIs, hours, workload) use lowest-level tasks only. Activities are the `checklist` array of a task; concurrent edits merge by item id on the client (`mergeList`), per-field last-writer-wins otherwise.
+
+Researcher on own tasks may change: `status notes est tags cf log timer priority checklist` (+ `title start due` on an own subtask); may submit intake requests (`src:"form"`, `Triage`).
 
 ## Shared-folder mode (no server)
 `public/index.html` also works without the server (user asked for a no-install option). Same page, same entities; `shared/*.js` (logic, validation, fold) is inlined into the page by `tools/inline.js` and a test fails if the copy drifts.

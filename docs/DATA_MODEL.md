@@ -40,6 +40,8 @@ Session object (`localStorage['labpm_v1']`, snapshot entries in `labpm_snaps_v1`
 | `created` | epoch ms | |
 | `src`, `requester` | string | Set for intake requests (`src:"form"`) |
 | `ovFired` | boolean | Overdue automation already fired |
+| `parent` | id \| null | **v2.** Parent task: subtasks are tasks with a parent, one level only, same project as the parent (enforced by the server). A task with subtasks follows them: dates = span of the subtasks, status = Done when all Done / In progress when any started |
+| `checklist` | `{id, t, done, by, at}[]` | **v2.** Activities of the task, ≤ 200; `t` text (≤ 300), `done` boolean, `by` user id and `at` epoch ms set when ticked. Items without a valid id or text are dropped |
 
 ### field (custom)
 `{id, name, type, options?, formula?}` — `type ∈ text | number | select | date | checkbox | formula`. Conventional names used by features: `Instrument` (select), `No. of samples` (number), `Lot` (text).

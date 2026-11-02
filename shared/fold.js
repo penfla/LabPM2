@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Conflict-free merge of per-device operation logs (shared-folder mode, no server)

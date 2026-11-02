@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: API integration tests (auth, RBAC, concurrency, SSE, import/export)
@@ -280,4 +280,69 @@ test('templates: a deleted built-in stays deleted after a server restart; an old
   var adm3 = (await call(b2, 'POST', '/api/login', { username: 'root1', password: 'long-password-1' })).c;
   assert.strictEqual((await call(b2, 'GET', '/api/state', null, adm3)).j.state.templates.length, 5);
   a2.server.close();
+});
+
+test('subtasks: one level, same project, parent follows its subtasks, closing the parent closes them', async function () {
+  var P1 = Object.assign({}, T, { projectId: 'p1', assignee: resId });
+  await req('POST', '/api/projects', { id: 'p2', name: 'Second', c: 2, status: 'auto' }, pm);
+  assert.strictEqual((await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'sp', start: '2026-12-01', due: '2026-12-01' }), pm)).s, 201);
+  var k1 = await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'sk1', parent: 'sp', projectId: 'zzz', start: '2026-12-02', due: '2026-12-03' }), pm);
+  assert.strictEqual(k1.s, 201); assert.strictEqual(k1.j.item.projectId, 'p1', 'project forced to the parent\'s');
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'sk2', parent: 'sp', start: '2026-12-04', due: '2026-12-08' }), pm);
+  var par = (await req('GET', '/api/tasks/sp', undefined, pm)).j.item;
+  assert.deepStrictEqual([par.start, par.due], ['2026-12-02', '2026-12-08'], 'parent spans its subtasks');
+  assert.strictEqual((await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'bad1', parent: 'sk1' }), pm)).s, 400); // nested
+  assert.strictEqual((await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'bad2', parent: 'nope' }), pm)).s, 400);
+  assert.strictEqual((await req('PATCH', '/api/tasks/sp', { parent: 'sk1' }, pm)).s, 400); // has subtasks
+  assert.strictEqual((await req('PATCH', '/api/tasks/sk1', { deps: ['sp'] }, pm)).s, 400); // subtask -> own parent
+  assert.strictEqual((await req('PATCH', '/api/tasks/sp', { deps: ['sk2'] }, pm)).s, 400); // parent -> own subtask
+  // status roll-up
+  var st = async function (id) { return (await req('GET', '/api/tasks/' + id, undefined, pm)).j.item.status; };
+  await req('PATCH', '/api/tasks/sk1', { status: 'In progress' }, pm); assert.strictEqual(await st('sp'), 'In progress');
+  await req('PATCH', '/api/tasks/sk1', { status: 'Done' }, pm); assert.strictEqual(await st('sp'), 'In progress');
+  await req('PATCH', '/api/tasks/sk2', { status: 'Done' }, pm); assert.strictEqual(await st('sp'), 'Done');
+  await req('PATCH', '/api/tasks/sk2', { status: 'To do' }, pm); assert.strictEqual(await st('sp'), 'In progress'); // reopened subtask reopens the parent
+  // closing the parent closes open subtasks
+  await req('PATCH', '/api/tasks/sp', { status: 'Done' }, pm);
+  assert.strictEqual(await st('sk2'), 'Done');
+  // moving the parent moves its subtasks
+  await req('PATCH', '/api/tasks/sp', { projectId: 'p2' }, pm);
+  assert.strictEqual((await req('GET', '/api/tasks/sk1', undefined, pm)).j.item.projectId, 'p2');
+});
+
+test('checklist (activities) and Researcher rules on subtasks', async function () {
+  var P1 = Object.assign({}, T, { projectId: 'p1', assignee: resId });
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'rp' }), pm);
+  await req('POST', '/api/tasks', Object.assign({}, T, { id: 'other', assignee: null }), pm);
+  var items = [{ id: 'c1', t: 'Weigh samples', done: false, by: null, at: null }, { id: 'c2', t: 'Dry 4 h', done: true, by: resId, at: 1700000000000 }, { id: 'bad id', t: 'x' }, { id: 'c3', t: '   ' }];
+  var put = await req('PATCH', '/api/tasks/rp', { checklist: items }, res1);
+  assert.strictEqual(put.s, 200, 'Researcher may edit activities on an assigned task');
+  assert.deepStrictEqual(put.j.item.checklist.map(function (c) { return c.id; }), ['c1', 'c2'], 'invalid items dropped');
+  assert.strictEqual(put.j.item.checklist[1].done, true);
+  assert.strictEqual((await req('PATCH', '/api/tasks/other', { checklist: items }, res1)).s, 403);
+  assert.strictEqual((await req('PATCH', '/api/tasks/rp', { checklist: items }, view)).s, 403);
+  // Researcher adds a subtask under their own task, assigned to themselves
+  var sub = Object.assign({}, T, { id: 'rs1', parent: 'rp', assignee: resId, title: 'Mine' });
+  assert.strictEqual((await req('POST', '/api/tasks', sub, res1)).s, 201);
+  assert.strictEqual((await req('POST', '/api/tasks', Object.assign({}, sub, { id: 'rs2', assignee: null }), res1)).s, 403, 'not for someone else / nobody');
+  assert.strictEqual((await req('POST', '/api/tasks', Object.assign({}, sub, { id: 'rs3', parent: 'other' }), res1)).s, 403, 'not under another person\'s task');
+  assert.strictEqual((await req('PATCH', '/api/tasks/rs1', { title: 'Renamed subtask' }, res1)).s, 200);
+  assert.strictEqual((await req('PATCH', '/api/tasks/rp', { title: 'Renamed parent' }, res1)).s, 403, 'top-level title stays PM-only');
+  assert.strictEqual((await req('PATCH', '/api/tasks/rs1', { assignee: null }, res1)).s, 403);
+  assert.strictEqual((await req('DELETE', '/api/tasks/rp', undefined, res1)).s, 403);
+  assert.strictEqual((await req('DELETE', '/api/tasks/rs1', undefined, res1)).s, 200, 'own subtask can be removed');
+  // deleting a parent deletes its subtasks (and their files) and detaches dependencies
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'dp' }), pm);
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'dk', parent: 'dp' }), pm);
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'dep', deps: ['dk'] }), pm);
+  assert.strictEqual((await req('DELETE', '/api/tasks/dp', undefined, pm)).s, 200);
+  assert.strictEqual((await req('GET', '/api/tasks/dk', undefined, pm)).s, 404);
+  assert.deepStrictEqual((await req('GET', '/api/tasks/dep', undefined, pm)).j.item.deps, []);
+  // deleting the last-but-one subtask recomputes the parent
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'qp' }), pm);
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'qa', parent: 'qp', status: 'Done' }), pm);
+  await req('POST', '/api/tasks', Object.assign({}, P1, { id: 'qb', parent: 'qp' }), pm);
+  assert.strictEqual((await req('GET', '/api/tasks/qp', undefined, pm)).j.item.status, 'In progress');
+  await req('DELETE', '/api/tasks/qb', undefined, pm);
+  assert.strictEqual((await req('GET', '/api/tasks/qp', undefined, pm)).j.item.status, 'Done');
 });

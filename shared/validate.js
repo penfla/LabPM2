@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Entity validation/normalisation (schema v1 of docs/DATA_MODEL.md)
@@ -47,7 +47,11 @@ var N = {
       tags: strArr(o.tags), cf: o.cf && typeof o.cf === 'object' && !Array.isArray(o.cf) ? o.cf : {},
       log: Array.isArray(o.log) ? o.log.slice(0, 2000).map(function (l) { return { id: str(l && l.id, 40), u: idOrNull(l && l.u), date: isDate(l && l.date) ? l.date : o.start, h: num(l && l.h, 0), note: str(l && l.note, 500) }; }) : [],
       timer: o.timer && idOrNull(o.timer.user) && isFinite(+o.timer.start) ? { user: o.timer.user, start: +o.timer.start } : null,
-      created: isFinite(+o.created) ? +o.created : Date.now(), ovFired: !!o.ovFired
+      created: isFinite(+o.created) ? +o.created : Date.now(), ovFired: !!o.ovFired,
+      parent: idOrNull(o.parent) && o.parent !== o.id ? o.parent : null,
+      checklist: Array.isArray(o.checklist) ? o.checklist.slice(0, 200).filter(function (c) { return c && typeof c === 'object' && ID_RE.test(c.id) && typeof c.t === 'string' && c.t.trim(); }).map(function (c) {
+        return { id: c.id, t: c.t.trim().slice(0, 300), done: !!c.done, by: idOrNull(c.by), at: c.done && isFinite(+c.at) ? +c.at : null };
+      }) : []
     };
     if (o.src === 'form') { t.src = 'form'; t.requester = str(o.requester, 120); }
     if (o.start > o.due) bad('start after due');

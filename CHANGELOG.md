@@ -1,6 +1,13 @@
 # Changelog
 
-## 2.0.0-beta.3 (unreleased)
+## 2.0.0-beta.4 (unreleased)
+- New: **subtasks** (`parent`, one level) and **activities** (`checklist`, tickable, records who/when). A task with subtasks follows them (dates span, status rolls up; closing it closes them) in the shared logic, so server and shared-folder mode behave the same. Subtasks are deleted with their parent and move with it between projects.
+- New: tick boxes for tasks/subtasks in the list, task panel and **Team progress**; per-person progress (tasks, activities, hours, overdue) page and dashboard widget; tasks are counted at the lowest level in all indicators.
+- New: **Quick add** outline (`# project`, tasks, indented subtasks, `- activities`, `@person #days ~hours !priority start: due:`) replaces the old “Create tasks from a list”; subtask / activity quick entry with Enter in the task panel.
+- Permissions: Researchers tick activities and add/remove subtasks on their own tasks (server-enforced). Excel export gains *Parent* and *Activities* columns.
+- Fix: server stores `parent`/`checklist` defaults for tasks created before this version (no revision change).
+
+## 2.0.0-beta.3
 - New: `tools/migrate-v1.js` (`npm run migrate -- …`): converts a v1.3 / Italian-prototype session file, validates it with the server rules and reports skipped records; with `--server` it imports into a running v2 server, matches people to accounts by display name and uploads attachments from the v1.3 backup folder. `docs/MIGRATION.md` rewritten as a full guide (routes, mapping table, checks, rollback, troubleshooting).
 - **License: Apache License 2.0** (was PolyForm Noncommercial 1.0.0) for code and documentation of this repository, including commercial use. `LICENSE` is the Apache-2.0 text, `NOTICE` carries the attribution; file headers use `SPDX-License-Identifier: Apache-2.0`; contributions are accepted under the same terms. LabPM 1.3 (https://github.com/penfla/LabPM) is unaffected.
 - New: **shared-folder mode**: the same `index.html` runs without any server on a shared network folder (Chrome/Edge): per-device operation logs merged per field (`shared/fold.js`), name-based identity, attachments, daily backups, import/export. Mode is detected automatically.

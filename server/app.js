@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.3
+ * Version: 2.0.0-beta.4
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: HTTP API (auth, CRUD with RBAC, SSE change feed, import/export, audit) and static client
@@ -128,7 +128,19 @@ function createApp(opts) {
     if (mode === 'create' && cur) throw err(409, 'already exists', { current: cur.d, rev: cur.rev });
     if (mode === 'update' && !cur) throw err(404, 'not found');
     if (cur && ifRev != null && ifRev !== cur.rev) throw err(409, 'stale revision', { current: cur.d, rev: cur.rev });
-    if (!P.can(user, cur ? 'update' : 'create', kind, cur && cur.d, d)) throw err(403, 'forbidden');
+    if (kind === 'tasks') { // a task and its subtasks cannot depend on each other (the roll-up would chase its own dates)
+      if (d.parent && d.deps.indexOf(d.parent) >= 0) throw err(400, 'a subtask cannot depend on its own parent');
+      if (d.deps.some(function (x) { var r = get('tasks', x); return r && r.d.parent === d.id; })) throw err(400, 'a task cannot depend on its own subtasks');
+    }
+    var pctx = { task: function (i) { var r = get('tasks', i); return r && r.d; } };
+    if (kind === 'tasks' && d.parent) { // subtasks: one level, same project as the parent
+      var par = get('tasks', d.parent);
+      if (!par) throw err(400, 'parent task not found');
+      if (par.d.parent) throw err(400, 'subtasks cannot be nested');
+      if (db.prepare("SELECT 1 FROM entities WHERE kind='tasks' AND json_extract(data,'$.parent')=?").get(d.id)) throw err(400, 'a task with subtasks cannot become a subtask');
+      d.projectId = par.d.projectId;
+    }
+    if (!P.can(user, cur ? 'update' : 'create', kind, cur && cur.d, d, pctx)) throw err(403, 'forbidden');
     if (kind === 'tasks') {
       if (user.role === 'Researcher' && d.timer && d.timer.user !== user.id) throw err(403, 'forbidden');
     }
@@ -141,6 +153,13 @@ function createApp(opts) {
     var rev = cur ? cur.rev + 1 : 1;
     q.putEnt.run(kind, d.id, JSON.stringify(d), rev, Date.now(), user.id);
     var evs = [emit(user.id, kind, d.id, cur ? 'update' : 'create', rev, d)];
+    if (kind === 'tasks' && cur && !d.parent && cur.d.projectId !== d.projectId) {
+      db.prepare("SELECT id, data, rev FROM entities WHERE kind='tasks' AND json_extract(data,'$.parent')=?").all(d.id).forEach(function (r) {
+        var k = JSON.parse(r.data); k.projectId = d.projectId;
+        q.putEnt.run('tasks', k.id, JSON.stringify(k), r.rev + 1, Date.now(), user.id);
+        evs.push(emit(user.id, 'tasks', k.id, 'update', r.rev + 1, k));
+      });
+    }
     if (kind === 'tasks') evs = evs.concat(runEngine(user.id, function (e) { e.update(cur && cur.d, e.byId[d.id]); }));
     return evs;
   }
@@ -155,7 +174,7 @@ function createApp(opts) {
     var cur = get(kind, id);
     if (!cur) throw err(404, 'not found');
     if (ifRev != null && ifRev !== cur.rev) throw err(409, 'stale revision', { current: cur.d, rev: cur.rev });
-    if (!P.can(user, 'delete', kind, cur.d, null)) throw err(403, 'forbidden');
+    if (!P.can(user, 'delete', kind, cur.d, null, { task: function (i) { var r = get('tasks', i); return r && r.d; } })) throw err(403, 'forbidden');
     var evs = [];
     if (kind === 'users') {
       if (cur.d.role === 'Admin' && q.admins.get().n <= 1) throw err(409, 'cannot delete the last Admin');
@@ -165,21 +184,29 @@ function createApp(opts) {
     evs.push(emit(user.id, kind, id, 'delete', cur.rev + 1, null));
     if (kind === 'files') afterCommit.push(function () { fs.unlinkSync(attPath(id)); });
     if (kind === 'tasks') {
-      db.prepare("SELECT id, rev FROM entities WHERE kind='files' AND json_extract(data,'$.taskId')=?").all(id).forEach(function (f) {
-        q.delEnt.run('files', f.id);
-        evs.push(emit(user.id, 'files', f.id, 'delete', f.rev + 1, null));
-        afterCommit.push(function () { fs.unlinkSync(attPath(f.id)); });
+      var gone = [id];
+      db.prepare("SELECT id, rev FROM entities WHERE kind='tasks' AND json_extract(data,'$.parent')=?").all(id).forEach(function (k) { // subtasks go with their parent
+        q.delEnt.run('tasks', k.id);
+        evs.push(emit(user.id, 'tasks', k.id, 'delete', k.rev + 1, null));
+        gone.push(k.id);
       });
-    }
-    if (kind === 'tasks') { // detach dependencies pointing at the deleted task
+      gone.forEach(function (gid) {
+        db.prepare("SELECT id, rev FROM entities WHERE kind='files' AND json_extract(data,'$.taskId')=?").all(gid).forEach(function (f) {
+          q.delEnt.run('files', f.id);
+          evs.push(emit(user.id, 'files', f.id, 'delete', f.rev + 1, null));
+          afterCommit.push(function () { fs.unlinkSync(attPath(f.id)); });
+        });
+      });
+      // detach dependencies pointing at deleted tasks
       db.prepare("SELECT id FROM entities WHERE kind='tasks'").all().forEach(function (r) {
         var t = get('tasks', r.id);
-        if (t.d.deps.indexOf(id) >= 0) {
-          t.d.deps = t.d.deps.filter(function (x) { return x !== id; });
+        if (t.d.deps.some(function (x) { return gone.indexOf(x) >= 0; })) {
+          t.d.deps = t.d.deps.filter(function (x) { return gone.indexOf(x) < 0; });
           q.putEnt.run('tasks', r.id, JSON.stringify(t.d), t.rev + 1, Date.now(), user.id);
           evs.push(emit(user.id, 'tasks', r.id, 'update', t.rev + 1, t.d));
         }
       });
+      if (cur.d.parent) evs = evs.concat(runEngine(user.id, function (e) { e.rollup(cur.d.parent); }));
     }
     return evs;
   }
@@ -249,7 +276,7 @@ function createApp(opts) {
     req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
-    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.3' });
+    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.4' });
 
     if (p === '/api/setup' && m === 'POST') return body(req).then(function (b) {
       var out = D.tx(db, function () { if (q.acctCount.get().n) throw err(409, 'already initialised'); return newAccount(b, 'Admin'); });
@@ -474,7 +501,13 @@ function createApp(opts) {
       if (r && r.catch) r.catch(done);
     } catch (e) { done(e); }
   });
-  D.tx(db, function () { return seedTemplates('system'); });
+  D.tx(db, function () { // tasks stored before subtasks existed get parent/checklist defaults (same revision, no event)
+    db.prepare("SELECT id, data FROM entities WHERE kind='tasks' AND (json_extract(data,'$.checklist') IS NULL)").all().forEach(function (r) {
+      var t = JSON.parse(r.data); t.parent = t.parent || null; t.checklist = t.checklist || [];
+      db.prepare("UPDATE entities SET data=? WHERE kind='tasks' AND id=?").run(JSON.stringify(V.normalize('tasks', t)), r.id);
+    });
+    return seedTemplates('system');
+  });
   var sweepTimer = setInterval(sweep, opts.sweepMs || 60000); sweepTimer.unref();
   sweep();
   server.on('close', function () { clearInterval(sweepTimer); clients.forEach(function (c) { c.res.end(); }); try { db.close(); } catch (e) { /* closed */ } });
