@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2.0.0-beta.3 (unreleased)
+- New: `tools/migrate-v1.js` (`npm run migrate -- …`): converts a v1.3 / Italian-prototype session file, validates it with the server rules and reports skipped records; with `--server` it imports into a running v2 server, matches people to accounts by display name and uploads attachments from the v1.3 backup folder. `docs/MIGRATION.md` rewritten as a full guide (routes, mapping table, checks, rollback, troubleshooting).
 - **License: Apache License 2.0** (was PolyForm Noncommercial 1.0.0) for code and documentation of this repository, including commercial use. `LICENSE` is the Apache-2.0 text, `NOTICE` carries the attribution; file headers use `SPDX-License-Identifier: Apache-2.0`; contributions are accepted under the same terms. LabPM 1.3 (https://github.com/penfla/LabPM) is unaffected.
 - New: **shared-folder mode**: the same `index.html` runs without any server on a shared network folder (Chrome/Edge): per-device operation logs merged per field (`shared/fold.js`), name-based identity, attachments, daily backups, import/export. Mode is detected automatically.
 - New: Firefox and Safari: server mode works in any browser; shared-folder mode opens read-only there (no File System Access API). Browser e2e test now runs on Chromium, Firefox and WebKit when installed (CI installs all three).

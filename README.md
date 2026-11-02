@@ -44,7 +44,7 @@ npm test                # API, merge, start-up and browser tests (browser tests 
 npm run inline          # after editing shared/*.js: re-embed them in public/index.html
 ```
 
- Details: `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/MIGRATION.md` (from v1.3), `SECURITY.md`, `CHANGELOG.md`.
+ Details: `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/MIGRATION.md` (from v1.3; tool: `npm run migrate -- session.json --server URL …`), `SECURITY.md`, `CHANGELOG.md`.
 
 Author: Flavio Pendolino · License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0) · Commercial use: permitted under the Apache License 2.0
 Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
