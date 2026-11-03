@@ -1,6 +1,9 @@
 # Changelog
 
-## 2.0.0-beta.5 (unreleased)
+## 2.0.0-beta.6 (unreleased)
+- Removed from the interface: hours (estimates, logged hours, timers, hour columns, Excel hour columns), the **Workload** view and dashboard widgets *Hours per project* and *6-week workload*, weekly capacity in Settings. Project progress is simply done tasks / tasks. The timeline bar fills with the share of activities done. Data of older versions is kept (database, JSON export, shared logic still stops a legacy running timer when a task is Done).
+
+## 2.0.0-beta.5
 - Layout: brand subtitle is just the version; **Settings page** (gear icon in the top bar) with tabs *Settings*, *Data & sync*, *Templates*, *Info & license* replaces the System menu and the Templates entry; the rail is Dashboard · Team progress · Projects (submenu Tasks) · Files · Requests · Automations · Documents.
 - Planning scheme **Project → Task → Activity**: *Portfolio* became **Projects**; click a project to open its tasks and activities (tick, add task, add activity inline); the Goals box was removed. Quick add: indented lines are activities (no subtasks, no `~hours`) and the new project opens afterwards.
 - Task window: no estimated hours, subtasks, dependencies, time or template steps; activities offer a drop-down of previously used activities. Subtask creation was removed from the UI (existing subtasks still work).

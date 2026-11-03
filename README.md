@@ -1,6 +1,6 @@
 # LabPM 2
 
-Multi-user project, task and request manager for chemical/polymer laboratories. Server: Node ≥ 22.13 + SQLite. Status: **2.0.0-beta.5**. Self-contained repository; client derived from LabPM v1.3 (https://github.com/penfla/LabPM).
+Multi-user project, task and request manager for chemical/polymer laboratories. Server: Node ≥ 22.13 + SQLite. Status: **2.0.0-beta.6**. Self-contained repository; client derived from LabPM v1.3 (https://github.com/penfla/LabPM).
 
 ## Two ways to run it (same `index.html`)
 

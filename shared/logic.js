@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.5
+ * Version: 2.0.0-beta.6
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Server-side date cascade, automations, overdue sweep and timer stop (moved from the v1.3 client)

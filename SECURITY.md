@@ -1,6 +1,6 @@
 # Security
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.5 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
+Author: Flavio Pendolino · Version: 2.0.0-beta.6 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 
 ## Scope
 

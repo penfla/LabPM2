@@ -1,6 +1,6 @@
 # Migrating from LabPM v1.3 (standalone) to v2
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.5 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
+Author: Flavio Pendolino · Version: 2.0.0-beta.6 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 Purpose: move the data of a v1.3 browser database (projects, tasks, hours, documents, rules, attachments) into LabPM v2. Method: export the session file in v1.3, convert and validate it with `tools/migrate-v1.js` (or import it in the page), check the report. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 Third-party components: none. Reference: v1.3 source and documentation at https://github.com/penfla/LabPM; v2 at https://github.com/penfla/LabPM2.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
@@ -99,7 +99,7 @@ Read it line by line: **every `SKIPPED` line is a record that was not migrated**
 | Projects (colour, status) | kept, ids preserved | |
 | Tasks, dates, estimate, priority, tags, notes | kept, ids preserved | dates must be valid `YYYY-MM-DD`, start ≤ due |
 | Dependencies | kept (and still drive the date cascade) but the task window no longer shows or edits them; links to missing tasks removed | the date cascade is **not** re-run on import; it runs on the next change of a predecessor |
-| Hours (log entries), estimates | kept in the data and Excel export; the task window no longer edits them in v2 | author mapped like assignees |
+| Hours (log entries), estimates | kept in the data and Excel export; the interface no longer shows or edits hours in v2 | author mapped like assignees |
 | Running timers | dropped | |
 | Custom fields, formulas, values | kept (`cf` values are keyed by field id) | formulas keep working; the variable `{registrate}` becomes `{logged}` |
 | Automations (rules) | kept, ids preserved | they run on the server from now on and do **not** fire on import |

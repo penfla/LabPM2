@@ -1,6 +1,6 @@
 # LabPM v2 — architecture (alpha)
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.5 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
+Author: Flavio Pendolino · Version: 2.0.0-beta.6 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 Purpose: central multi-user server for LabPM (option C). Method: Node.js built-ins + SQLite. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
 Third-party components: none at runtime (Node.js ≥ 22.13: `node:http`, `node:sqlite`, `node:crypto`). Reference baseline: https://github.com/penfla/LabPM (v1.3.0).

@@ -1,6 +1,6 @@
 # User guide
 
-Applies to LabPM 2.0.0-beta.5. Source: https://github.com/penfla/LabPM2
+Applies to LabPM 2.0.0-beta.6. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
@@ -16,34 +16,33 @@ Widgets can be toggled under *Visible widgets* (preference is saved).
 
 | Widget | Definition |
 |---|---|
-| Indicators | Open tasks; overdue (due < today and not Done); blocked (any predecessor not Done); hours logged / estimated (open tasks only); projects *At risk*; instrument conflicts |
+| Indicators | Open tasks; overdue (due < today and not Done); blocked (any predecessor not Done); projects *At risk*; instrument conflicts |
 | Task status | Count per status |
-| Hours per project | Grey = estimated, coloured = logged |
-| 6-week workload | Per person, one bar per week from the current Monday; green ≤ 85 % of capacity, amber 85–100 %, red > 100 % |
 | Deadlines within 7 days | Open tasks with due ≤ today + 7 (includes overdue) |
 | Instrument conflicts | Pairs of open tasks with the same *Instrument* value (≠ *Other*) and overlapping start–due intervals |
-| Project summary | Rule-based text (progress, overdue, blocked, delays blocking others, next unblocked task, hours). No generative AI |
+| Project summary | Rule-based text (progress, overdue, blocked, delays blocking others, next unblocked task, activities done). No generative AI |
 
 ## 3. Tasks (submenu of Projects)
 
+> Hours, timers, workload and weekly capacity were removed from the interface in 2.0.0-beta.6 (planning is Project → Task → Activity). Estimates and logged hours of older data stay in the database and in the JSON export; the Excel export no longer lists them.
+
 All tasks of all projects in five views. To work project by project use **Projects** (§5): open a project to see its tasks and their activities.
 
-Toolbar: view switch, **Quick add** (PM/Admin, §3c), search (title + tags), filters (project, assignee, status, priority, due-date range *from / to*), *Clear filters*, grouping (List only), **Export Excel (n)**, **+ Task** (PM/Admin). Filters apply to all five views and persist across reloads.
+Toolbar: view switch, **Quick add** (PM/Admin, §3c), search (title + tags), filters (project, assignee, status, priority, due-date range *from / to*), *Clear filters*, grouping (List only), **Export Excel (n)**, **+ Task** (PM/Admin). Filters apply to all four views and persist across reloads.
 
 | View | Notes |
 |---|---|
 | List | First column is a **tick box** (done / not done); subtasks are indented under their task with chips for subtasks and activities done. No column sorting; optional grouping (status, project, person, priority). Custom fields appear as extra columns. Click a row to open the detail drawer |
 | Board | One column per status. Drag a card to change status (blocked tasks refuse *In progress / In review / Done*) |
-| Timeline | Bars = start→due on working-day grid; dark fill = logged / estimated; arrows = dependencies; red line = today |
+| Timeline | Bars = start→due on working-day grid; dark fill = share of activities done (or complete when Done); arrows = dependencies; red line = today |
 | Calendar | Month grid, cards on due date (max 3 per day + counter) |
-| Workload | Hours per person per week for 6 weeks, vs capacity |
 
 ### Excel export
 
 **Export Excel (n)** writes the *n* tasks currently matching the filters (all roles). Choose the filters first, then export; the button shows the live row count.
 
 - Browsers with the File System Access API (Chrome, Edge) open a *Save as* dialog (starting in the backup folder if one is connected); others download `labpm-tasks-YYYY-MM-DD.xlsx`.
-- Sheet **Tasks** (sorted by project, then start): Title, Project, Status, Assignee, Priority, Start, Due (real Excel dates), Estimated h, Logged h, Overdue, Blocked, Depends on, Tags, one column per custom field (number/date types preserved; formula fields as computed values), Requester, Notes. Header row styled and frozen, autofilter on.
+- Sheet **Tasks** (sorted by project, then start): Title, Project, Status, Assignee, Priority, Start, Due (real Excel dates), Overdue, Blocked, Depends on, Tags, one column per custom field (number/date types preserved; formula fields as computed values), Requester, Notes. Header row styled and frozen, autofilter on.
 - Sheet **Export info**: application version, timestamp, user and role, row count and the filter values used.
 - Values are a snapshot: formulas are exported as numbers, not Excel formulas.
 
@@ -79,7 +78,7 @@ Work → **Projects** lists all projects: status, progress, period, tasks done a
 
 - Add a project with *+ Project* or build everything at once with **Quick add** (§3c).
 - Project status: *Auto* (Done if all tasks Done; *At risk* if any open task is overdue; else *On track*) or manual override (*On track, At risk, On hold, Done*).
-- Progress = Done tasks / tasks (weighted by estimated hours where they exist, otherwise each task counts 1).
+- Progress = Done tasks / tasks (every task counts the same).
 - *Notes* opens (or creates) the project's note document.
 - The *Goals* box of earlier versions was removed (existing goals stay in the data).
 
@@ -87,7 +86,7 @@ Work → **Projects** lists all projects: status, progress, period, tasks done a
 
 Templates live in the Settings page (gear icon → *Templates*) and are not part of the daily workflow for now.
 
-A template is a named list of steps: title, duration in working days, estimated hours, optional *Instrument*, and the earlier steps each one must wait for (finish-to-start). Five laboratory templates are provided the first time a database is created; afterwards they are ordinary records that Admin and Project manager can edit, duplicate and delete (they are not restored automatically once deleted).
+A template is a named list of steps: title, duration in working days, optional *Instrument*, and the earlier steps each one must wait for (finish-to-start). Five laboratory templates are provided the first time a database is created; afterwards they are ordinary records that Admin and Project manager can edit, duplicate and delete (they are not restored automatically once deleted).
 
 | Provided template | Steps | Standards cited |
 |---|---|---|
@@ -136,7 +135,7 @@ Tokens are removed from the title. Without `start:` tasks begin on the start dat
 
 **Team progress** (Work → Team progress, right under Dashboard) shows, per person and optionally per project: tasks done / total, activities done / total, open and overdue tasks, each with a progress bar, followed by one card per person listing their open tasks (completed ones on request) with tick boxes and activities. A dashboard widget *Progress by person* summarises the same figures.
 
-*Subtasks* introduced in 2.0.0-beta.5 are no longer offered: use activities. Subtasks that already exist keep working (indented in the list; the task follows them).
+*Subtasks* introduced in 2.0.0-beta.6 are no longer offered: use activities. Subtasks that already exist keep working (indented in the list; the task follows them).
 
 ## 7. Automations
 
@@ -172,7 +171,7 @@ Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, ba
 
 The gear icon in the top bar opens one page with four tabs:
 
-- **Settings** — *Users and roles* and weekly capacity (Admin only; create accounts, reset passwords); *Custom fields* (PM/Admin; types text, number, select, date, checkbox, formula — variables `{est}`, `{logged}` and number fields); *Integrations* (copy ICS calendar, copy JSON); *Activity log* (changes received in this browser session; the full trail is in the server audit).
+- **Settings** — *Users and roles* (Admin only; create accounts, reset passwords); *Custom fields* (PM/Admin; types text, number, select, date, checkbox, formula — variables `{est}`, `{logged}` and number fields); *Integrations* (copy ICS calendar, copy JSON); *Activity log* (changes received in this browser session; the full trail is in the server audit).
 - **Data & sync** — status, account, export / import, backups, empty database (§11).
 - **Templates** — edit, duplicate, delete, create and apply templates (§6).
 - **Info & license** — author, license, references.
@@ -183,7 +182,7 @@ The gear icon in the top bar opens one page with four tabs:
 |---|:-:|:-:|:-:|:-:|
 | View everything | ✓ | ✓ | ✓ | ✓ |
 | Create / delete tasks, change assignee | ✓ | ✓ | – | – |
-| Edit task fields, timer, hours, tick activities / subtasks | ✓ | ✓ | own tasks | – |
+| Edit task fields, tick activities | ✓ | ✓ | own tasks | – |
 | Add subtasks and activities | ✓ | ✓ | on own tasks (subtask assigned to themselves) | – |
 | Projects, goals, templates, bulk entry, fields, rules | ✓ | ✓ | – | – |
 | Accept requests | ✓ | ✓ | – | – |
@@ -192,7 +191,7 @@ The gear icon in the top bar opens one page with four tabs:
 | Users & accounts, import / export, backups and restore, clear data | ✓ | – | – | – |
 | Attach files | ✓ | ✓ | own tasks | – |
 
-Roles are enforced by the server on every request (see [SECURITY.md](../SECURITY.md)). A Researcher may change status, notes, estimate, tags, custom fields, hours, timer, priority and activities on own tasks, not title, dates, project or assignee (on a *subtask* assigned to them also title and dates); they can add subtasks under their own tasks (assigned to themselves) and delete those.
+Roles are enforced by the server on every request (see [SECURITY.md](../SECURITY.md)). A Researcher may change status, notes, tags, custom fields, priority and activities on own tasks, not title, dates, project or assignee (on a *subtask* assigned to them also title and dates); they can add subtasks under their own tasks (assigned to themselves) and delete those.
 
 ## 11. Data, sync and backups
 
@@ -209,7 +208,7 @@ Every change is sent to the server within ~0.3 s and appears in the other open s
 | Import a session file | Data & sync | Admin; adds/overwrites by id, deletes nothing; optional people as placeholders (no login); timers dropped; ≤ 5 MB |
 | Backups | Data & sync | Admin; *Create backup now*, *Restore* (replaces all data and accounts, signs everyone out, saves a `pre-restore` copy first) |
 | Empty database file | Data & sync | `labpm-empty.json` for a fresh import |
-| Clear all project data | Data & sync | Admin; two clicks; deletes projects, tasks, hours, goals, documents, rules for everyone; keeps people, roles, custom fields. Download the database first |
+| Clear all project data | Data & sync | Admin; two clicks; deletes projects, tasks, documents, rules for everyone; keeps people, roles, custom fields. Download the database first |
 
 Automatic backups: at every server start and daily at 03:00, last 14, in `backups/` of the data folder. They contain the database and accounts, not attachment files: copy the whole data folder for a complete backup.
 
