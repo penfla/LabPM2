@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Browser test of shared-folder mode (no server): identity, merge, attachments, backup
@@ -45,11 +45,11 @@ test('shared-folder mode: two tabs, no server (login-free identity, merge, files
     assert.ok(/Shared folder/.test(await A.textContent('#sv')));
     // helper: poll this tab's view of the shared folder until some log contains the text (Playwright does not await async predicates)
     var folder = url.split('#opfs=')[1];
-    var logHas = function (pg, text) { return pg.evaluate(async function (a) { var l = await (await (await navigator.storage.getDirectory()).getDirectoryHandle(a.name)).getDirectoryHandle('log'); for await (var e of l.entries()) { if ((await (await e[1].getFile()).text()).indexOf(a.text) >= 0) return true; } return false; }, { name: folder, text: text }); };
+    var logHas = function (pg, text) { return pg.evaluate(async function (a) { var l = await (await (await navigator.storage.getDirectory()).getDirectoryHandle(a.name)).getDirectoryHandle('log'); for await (var e of l.entries()) { try { if ((await (await e[1].getFile()).text()).indexOf(a.text) >= 0) return true; } catch (x) { /* being replaced by its writer */ } } return false; }, { name: folder, text: text }); };
     var waitLog = async function (pg, text, ms) { var t0 = Date.now(); while (Date.now() - t0 < ms) { if (await logHas(pg, text)) return true; await pg.waitForTimeout(150); } return false; };
     assert.ok(await waitLog(A, 'DSC characterization', 10000), 'built-in templates seeded into the log'); // the page re-renders once after seeding: import only afterwards
     // import a v1 session (Admin) -> operations are written to this device's log
-    await A.click('[data-act=nav][data-v=session]');
+    await A.click('[data-act=nav][data-v=settings]'); await A.click('[data-act=settab][data-v=data]');
     var imported = false;
     for (var attempt = 0; attempt < 3 && !imported; attempt++) {
       await A.setInputFiles('input[data-ch=openfile]', { name: 'v1.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(V1)) });
@@ -71,34 +71,38 @@ test('shared-folder mode: two tabs, no server (login-free identity, merge, files
     await B.waitForFunction(function () { return /In progress/.test(document.querySelector('#vb').innerText); }, null, { timeout: 15000 });
     await A.keyboard.press('Escape');
     // built-in templates are seeded by the first Admin/PM; Admin deletes one and the other PC sees it
-    await A.click('[data-act=nav][data-v=templates]'); await B.click('[data-act=nav][data-v=templates]');
+    await A.click('[data-act=nav][data-v=settings]'); await A.click('[data-act=settab][data-v=templates]');
+    await B.click('[data-act=nav][data-v=settings]'); await B.click('[data-act=settab][data-v=templates]');
     await A.waitForFunction(function () { return document.querySelectorAll('[data-act=tpledit]').length === 5; });
     await B.waitForFunction(function () { return document.querySelectorAll('.wgrid > section').length === 5; }, null, { timeout: 15000 });
     assert.strictEqual(await B.locator('[data-act=tpledit]').count(), 0); // Researcher: view only
     await A.locator('[data-act=tpldel]').last().click(); await A.locator('[data-act=tpldel2]').click();
     await B.waitForFunction(function () { return document.querySelectorAll('.wgrid > section').length === 4; }, null, { timeout: 15000 });
     await B.click('[data-act=nav][data-v=tasks]');
-    // subtasks and activities in shared-folder mode: the shared logic runs in the browser of whoever edits
-    await A.click('[data-act=nav][data-v=tasks]'); await A.click('[data-act=qa]');
+    // projects, tasks and activities in shared-folder mode (Quick add, ticking, per-person progress)
+    await A.click('[data-act=nav][data-v=projects]'); await A.click('[data-act=qa]');
     await A.fill('#qa-p', 'Extrusion run');
-    await A.fill('#qa-t', ['Set up line @Flavio #1', '  Heat zones #1', '  - Check die', 'Pelletize @Anna #1'].join('\n'));
+    await A.fill('#qa-t', ['Set up line @Flavio #1', '  Heat zones', '  - Check die', 'Pelletize @Anna #1'].join('\n'));
     await A.click('[data-act=qacreate]');
     await A.waitForSelector('text=Heat zones');
-    await A.click('tr:has-text("Heat zones") input[data-ch=taskchk]');
+    await A.click('label:has-text("Heat zones") input[data-ch=acttick]');
+    await A.click('.pl:has-text("Set up line") input[data-ch=taskchk]');
     await B.click('[data-act=nav][data-v=progress]');
-    await B.waitForFunction(function () { return /Set up line|Flavio/.test(document.querySelector('#vb').innerText) && /1 \/ 1/.test(document.querySelector('#vb').innerText); }, null, { timeout: 20000 });
+    await B.waitForFunction(function () { var t = document.querySelector('#vb').innerText; return /1 \/ 1/.test(t) && /1 \/ 2/.test(t); }, null, { timeout: 20000 }); // Flavio: task 1 of 1, activities 1 of 2
     await B.click('[data-act=nav][data-v=tasks]');
     await B.waitForSelector('tr:has-text("Set up line")', { timeout: 15000 });
-    assert.ok(/Done/.test(await B.locator('tr:has-text("Set up line")').first().innerText()), 'parent Done after its only subtask is ticked');
+    assert.ok(/Done/.test(await B.locator('tr:has-text("Set up line")').first().innerText()), 'ticked task is Done for the other PC');
     // A uploads a file, B downloads it
     await A.click('[data-act=nav][data-v=files]'); await B.click('[data-act=nav][data-v=files]');
-    await A.setInputFiles('input[data-ch=fupg]', { name: 'dsc-report.txt', mimeType: 'text/plain', buffer: Buffer.from('Tm 165.2 C') });
-    await B.waitForSelector('text=dsc-report.txt', { timeout: 15000 });
+    await A.setInputFiles('input[data-ch=fstage]', { name: 'dsc-report.txt', mimeType: 'text/plain', buffer: Buffer.from('Tm 165.2 C') });
+    await A.fill('input[data-stg=g][data-i="0"]', 'DSC report November');
+    await A.click('[data-act=fstageup]');
+    await B.waitForSelector('text=DSC report November', { timeout: 15000 });
     var dl = B.waitForEvent('download'); await B.click('a[data-act=fdl]');
     var d = await dl; var chunks = []; var st = await d.createReadStream(); for await (var c of st) chunks.push(c);
     assert.strictEqual(Buffer.concat(chunks).toString(), 'Tm 165.2 C');
     // backup from the Data page (Admin)
-    await A.click('[data-act=nav][data-v=session]'); await A.click('[data-act=bknow]');
+    await A.click('[data-act=nav][data-v=settings]'); await A.click('[data-act=settab][data-v=data]'); await A.click('[data-act=bknow]');
     await A.waitForSelector('[data-act=bkrestore]', { timeout: 5000 });
     assert.deepStrictEqual(errs, []);
   } finally { await browser.close(); srv.close(); }

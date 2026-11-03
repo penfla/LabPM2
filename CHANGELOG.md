@@ -1,6 +1,13 @@
 # Changelog
 
-## 2.0.0-beta.4 (unreleased)
+## 2.0.0-beta.5 (unreleased)
+- Layout: brand subtitle is just the version; **Settings page** (gear icon in the top bar) with tabs *Settings*, *Data & sync*, *Templates*, *Info & license* replaces the System menu and the Templates entry; the rail is Dashboard · Team progress · Projects (submenu Tasks) · Files · Requests · Automations · Documents.
+- Planning scheme **Project → Task → Activity**: *Portfolio* became **Projects**; click a project to open its tasks and activities (tick, add task, add activity inline); the Goals box was removed. Quick add: indented lines are activities (no subtasks, no `~hours`) and the new project opens afterwards.
+- Task window: no estimated hours, subtasks, dependencies, time or template steps; activities offer a drop-down of previously used activities. Subtask creation was removed from the UI (existing subtasks still work).
+- Files: each uploaded file gets a display name (`title`, empty = file name) chosen in a staging list before upload (page and task window; server and shared-folder mode).
+- Team progress: *Progress by person* shows tasks, activities, open and overdue only (hours columns removed); the menu sits under Dashboard.
+
+## 2.0.0-beta.4
 - New: **subtasks** (`parent`, one level) and **activities** (`checklist`, tickable, records who/when). A task with subtasks follows them (dates span, status rolls up; closing it closes them) in the shared logic, so server and shared-folder mode behave the same. Subtasks are deleted with their parent and move with it between projects.
 - New: tick boxes for tasks/subtasks in the list, task panel and **Team progress**; per-person progress (tasks, activities, hours, overdue) page and dashboard widget; tasks are counted at the lowest level in all indicators.
 - New: **Quick add** outline (`# project`, tasks, indented subtasks, `- activities`, `@person #days ~hours !priority start: due:`) replaces the old “Create tasks from a list”; subtask / activity quick entry with Enter in the task panel.

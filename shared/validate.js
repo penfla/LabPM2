@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Entity validation/normalisation (schema v1 of docs/DATA_MODEL.md)
@@ -86,7 +86,7 @@ var N = {
       return s;
     }) };
   },
-  files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
+  files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), title: str(o.title, 200).trim() || str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
 };
 
 function normalize(kind, o) {

@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: API integration tests (auth, RBAC, concurrency, SSE, import/export)
@@ -199,6 +199,10 @@ test('attachments: upload, authenticated download, limits, RBAC, cascade on task
   assert.ok(/attachment/.test(dl.headers.get('content-disposition')));
   assert.deepStrictEqual(Buffer.from(await dl.arrayBuffer()), data);
   assert.strictEqual((await fetch(base + '/api/files/' + id + '/download')).status, 401);
+  assert.strictEqual(up.j.item.title, up.j.item.name, 'title defaults to the file name');
+  var named = await upload(pm, 'taskId=at1&name=raw.pdf&title=' + encodeURIComponent('DSC report  Nov\u0007'), data);
+  assert.strictEqual(named.j.item.title, 'DSC report  Nov', 'title kept (control characters removed, trimmed)'); assert.strictEqual(named.j.item.name, 'raw.pdf');
+  await req('DELETE', '/api/files/' + named.j.id, undefined, pm);
   assert.strictEqual((await upload(view, 'taskId=at1&name=x.pdf', data)).s, 403);
   assert.strictEqual((await upload(res1, 'taskId=at2&name=x.pdf', data)).s, 403); // not their task
   assert.strictEqual((await upload(res1, 'taskId=at1&name=mine.pdf', data)).s, 201);

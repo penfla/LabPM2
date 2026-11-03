@@ -59,7 +59,7 @@ Session object (`localStorage['labpm_v1']`, snapshot entries in `labpm_snaps_v1`
 `{id, name, desc, tasks:[{t, d, est, tool?, after?}]}` — `t` step title; `d` working days (1–60); `est` hours; `tool` instrument name; `after` indices (0-based) of earlier steps. 1–60 steps; forward or duplicate references are dropped. The five built-in templates (ids `tpl-dsc`, `tpl-ext`, `tpl-film`, `tpl-cal`, `tpl-val`) are seeded once per database (server: `meta.templates_seeded`; shared folder: an id with any history is never re-created). Session files without `templates` import normally.
 
 ### file (attachment record)
-`{id, taskId, projectId, name, path, size, type, added, by}` — `path` is relative to the backup folder (`attachments/<owner-folder>/<name>`); `taskId` empty = project-level; `added` epoch ms; `by` user id. The binary lives only in the folder, never in the JSON.
+`{id, taskId, projectId, name, title, path, size, type, added, by}` — `path` is relative to the backup folder (`attachments/<owner-folder>/<name>`); `title` = display name chosen at upload (empty → the file name; records from before beta.5 show `name`); `taskId` empty = project-level; `added` epoch ms; `by` user id. The binary lives only in the folder, never in the JSON.
 
 ### goal
 `{id, name, target:"YYYY-MM-DD", pids:id[]}`

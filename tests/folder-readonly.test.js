@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Read-only shared-folder view for browsers without the File System Access API (Firefox, Safari)
@@ -66,7 +66,7 @@ test('browser without File System Access API (Firefox/Safari): read-only folder 
     await page.waitForSelector('text=DSC run PP-04');
     await page.click('tr[data-id=t1]');
     assert.ok(await page.isDisabled('select[data-ch=dr][data-f=status]'), 'Researcher is forced to view-only');
-    assert.strictEqual(await page.locator('input[data-ch=fup]').count(), 0);
+    assert.strictEqual(await page.locator('input[data-ch=fstage]').count(), 0);
     await page.keyboard.press('Escape');
     await page.click('[data-act=nav][data-v=files]');
     var dl = page.waitForEvent('download'); await page.click('a[data-act=fdl]');

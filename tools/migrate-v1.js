@@ -5,7 +5,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: Convert a LabPM v1.3 session file to v2 and optionally import it (with attachments) into a v2 server

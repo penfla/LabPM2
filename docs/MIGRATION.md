@@ -1,6 +1,6 @@
 # Migrating from LabPM v1.3 (standalone) to v2
 
-Author: Flavio Pendolino · Version: 2.0.0-beta.4 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
+Author: Flavio Pendolino · Version: 2.0.0-beta.5 · License: Apache License 2.0 · Commercial use: permitted under the Apache License 2.0
 Purpose: move the data of a v1.3 browser database (projects, tasks, hours, documents, rules, attachments) into LabPM v2. Method: export the session file in v1.3, convert and validate it with `tools/migrate-v1.js` (or import it in the page), check the report. Disclaimer: validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.
 Third-party components: none. Reference: v1.3 source and documentation at https://github.com/penfla/LabPM; v2 at https://github.com/penfla/LabPM2.
 AI disclosure: this tool performs deterministic calculations; it does not generate content through generative AI (Art. 50 AI Act not applicable).
@@ -86,7 +86,7 @@ Read it line by line: **every `SKIPPED` line is a record that was not migrated**
 
 ## 5. Routes B and C: import in the page
 
-1. *Data & sync → Import a session file* (Admin). Prefer the converted file (`*.v2.json`, from `node tools/migrate-v1.js session.json`): it is validated and reported, and it is required for Italian prototype files. A plain v1.3 file also works if it contains no invalid record.
+1. *Settings (gear icon) → Data & sync → Import a session file* (Admin). Prefer the converted file (`*.v2.json`, from `node tools/migrate-v1.js session.json`): it is validated and reported, and it is required for Italian prototype files. A plain v1.3 file also works if it contains no invalid record.
 2. Tick *Import people as placeholders* only if assignments and hour logs must stay readable (same meaning as above). Without it, people in the file are ignored and assignments show “—”.
 3. A toast reports the number of records (shared-folder mode also the number skipped). In server mode a single invalid record rejects the whole file with an error message: convert it with the tool to see which one.
 4. Re-attach files you still need (*Files* page or the task panel). v1.3 attachment records point to a local folder and are not imported.
@@ -98,13 +98,14 @@ Read it line by line: **every `SKIPPED` line is a record that was not migrated**
 | Users, roles, weekly capacity | placeholders or matched accounts | passwords never existed in v1.3 |
 | Projects (colour, status) | kept, ids preserved | |
 | Tasks, dates, estimate, priority, tags, notes | kept, ids preserved | dates must be valid `YYYY-MM-DD`, start ≤ due |
-| Dependencies | kept; links to missing tasks removed | the date cascade is **not** re-run on import; it runs on the next change of a predecessor |
-| Hours (log entries) | kept | author mapped like assignees |
+| Dependencies | kept (and still drive the date cascade) but the task window no longer shows or edits them; links to missing tasks removed | the date cascade is **not** re-run on import; it runs on the next change of a predecessor |
+| Hours (log entries), estimates | kept in the data and Excel export; the task window no longer edits them in v2 | author mapped like assignees |
 | Running timers | dropped | |
 | Custom fields, formulas, values | kept (`cf` values are keyed by field id) | formulas keep working; the variable `{registrate}` becomes `{logged}` |
 | Automations (rules) | kept, ids preserved | they run on the server from now on and do **not** fire on import |
 | Subtasks, activities | do not exist in v1.3: nothing to migrate; add them in v2 (Quick add, task panel) |
-| Goals, documents | kept | |
+| Goals | kept in the data; the Goals box was removed from the interface in v2 |
+| Documents | kept | |
 | Built-in templates | the same five are provided as editable templates | edit or delete them on the Templates page |
 | Attachments (files + records) | uploaded by route A, otherwise by hand | |
 | Activity log | not migrated | v2 keeps its own audit trail from the first change |
@@ -116,7 +117,7 @@ Read it line by line: **every `SKIPPED` line is a record that was not migrated**
 2. Open the Timeline and Workload of one project in both versions; open 3–5 tasks with dependencies and logged hours.
 3. Export the task list to Excel from both (Tasks → Export) and compare hours and dates.
 4. Create a throw-away task, move its due date and delete it, to see the live updates and the cascade on the new system.
-5. Look at *Data & sync → Backups*: make a backup now, so that the migrated state is the first restore point.
+5. Look at *Settings → Data & sync → Backups*: make a backup now, so that the migrated state is the first restore point.
 
 ## 8. Roll back and repeat
 

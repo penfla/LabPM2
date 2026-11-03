@@ -1,12 +1,14 @@
 # User guide
 
-Applies to LabPM 2.0.0-beta.4. Source: https://github.com/penfla/LabPM2
+Applies to LabPM 2.0.0-beta.5. Source: https://github.com/penfla/LabPM2
 
 ## 1. Navigation
 
-Left rail: **Work** (Dashboard, Tasks, Files, Requests) · **Planning** (Portfolio, Templates, Automations, Documents) · **System** (Data & sync, Settings, Info & license). On screens ≤ 860 px the rail becomes a horizontal scroll bar.
+Planning follows one scheme: **Project → Task → Activity.** A project has several tasks, a task has several activities (checklist items).
 
-Top bar: running-timer button (opens the task), theme (Light / Dark / Auto), your name and role with **Sign out** (roles are enforced by the server; see §10).
+Left rail: **Work** — Dashboard · Team progress · Projects (with the submenu **Tasks**) · Files · Requests; **Planning** — Automations · Documents. On screens ≤ 860 px the rail becomes a horizontal scroll bar. The footer of the rail shows the sync status.
+
+Top bar: the **gear icon** opens the Settings page (people and roles, custom fields, *Data & sync*, *Templates*, *Info & license*, see §9), theme (Light / Dark / Auto), your name and role with **Sign out** (roles are enforced by the server; see §10).
 
 ## 2. Dashboard
 
@@ -22,7 +24,9 @@ Widgets can be toggled under *Visible widgets* (preference is saved).
 | Instrument conflicts | Pairs of open tasks with the same *Instrument* value (≠ *Other*) and overlapping start–due intervals |
 | Project summary | Rule-based text (progress, overdue, blocked, delays blocking others, next unblocked task, hours). No generative AI |
 
-## 3. Tasks
+## 3. Tasks (submenu of Projects)
+
+All tasks of all projects in five views. To work project by project use **Projects** (§5): open a project to see its tasks and their activities.
 
 Toolbar: view switch, **Quick add** (PM/Admin, §3c), search (title + tags), filters (project, assignee, status, priority, due-date range *from / to*), *Clear filters*, grouping (List only), **Export Excel (n)**, **+ Task** (PM/Admin). Filters apply to all five views and persist across reloads.
 
@@ -43,26 +47,23 @@ Toolbar: view switch, **Quick add** (PM/Admin, §3c), search (title + tags), fil
 - Sheet **Export info**: application version, timestamp, user and role, row count and the filter values used.
 - Values are a snapshot: formulas are exported as numbers, not Excel formulas.
 
-### Task drawer
+### Task window
 
-Title, project, status, assignee (PM/Admin only), priority, start, due, estimated hours, tags, custom fields, dependencies, time tracking, notes, linked documents, delete (two-step confirm).
+Opens when you click a task or **+ Task**. Fields: title, project, status, assignee (PM/Admin only), priority, start, due, tags, custom fields, **activities**, attachments, notes, linked documents, delete (two-step confirm). There are no estimated-hours, subtask, dependency, time-tracking or template-step sections any more (planning is Project → Task → Activity); existing values of those kinds stay in the data and in the Excel export.
 
-- **Activities (checklist).** Small things to do inside the task. Tick the box when done (it records who and when), type in the last field and press **Enter** to add one (paste several lines to add many), ✕ removes. The task keeps its own status: activities do not close it.
-- **Subtasks.** A task can have subtasks (one level). Tick a subtask to mark it Done; add one by typing in the last field and pressing **Enter** (`Weigh samples @Rossi #1 ~2h` — same options as Quick add; without `@` it takes the assignee of the task). A subtask belongs to the project of its task and can have its own activities, dependencies, hours and files. The **task with subtasks follows them automatically**: its dates span its subtasks, it becomes *In progress* when one starts and *Done* when all are Done (and goes back to *In progress* if one is reopened). Marking the task itself Done closes its open subtasks. Deleting it deletes its subtasks.
-- **Dependencies (finish-to-start).** Tick predecessors. Circular links are prevented (candidates exclude tasks that already depend on the current one).
-- **Cascade.** Changing a due date or adding a predecessor moves every non-Done successor whose start ≤ predecessor due: new start = next working day after the predecessor due, duration (in working days) preserved, recursively. A toast reports how many tasks moved.
-- **Attachments.** Add one or more files from the drawer (needs a connected backup folder, see §11). Each file is copied to `<folder>/attachments/task-<title>-<id>/`; *Open* shows it in a new tab (falls back to download), *Save copy* downloads it, *Remove* drops the link only. Researchers can attach to their own tasks; PM/Admin to any; Viewer cannot.
-- **Time.** *Start timer* (stops any other timer you have running); stopping logs hours (≥ 0.01 h, rounded to 0.01) with note "Timer". Manual entry: hours + note → today. Last 8 entries shown.
+- **Activities (checklist).** Things to do inside the task. Tick the box when done (it records who and when). Type in the field and press **Enter** to add one (paste several lines to add many); the drop-down **Add a previous activity…** offers every activity already used in any task (most frequent first) so repeated work is one click; ✕ removes. Activities do not close the task.
+- **Cascade.** Changing a due date moves every non-Done successor of tasks that still have dependencies (older data): new start = next working day after the predecessor due, duration preserved, recursively; a toast reports how many moved.
+- **Attachments.** Choose files, give each a name (empty = file name) and *Upload*; see §3b.
 - **Overdue flag.** Computed live; also fires *overdue* automations once per task (re-armed when dates change).
 
 ## 3b. Files
 
 Attachments are stored on the server, in `attachments/` inside the data folder, and are visible to everyone who can see the task or project.
 
-1. Choose *Project*; optionally a *Task* (otherwise the file is project-level) and pick files (multiple). Limit 25 MB per file (server setting `MAX_UPLOAD_MB`). The same upload control is in the task drawer.
+1. Choose *Project*; optionally a *Task* (otherwise the file is project-level), pick files (multiple), then **give each file a name** in the list that appears (leave it empty to use the file name) and press *Upload*. Limit 25 MB per file (server setting `MAX_UPLOAD_MB`). The same upload control is in the task drawer.
 2. *Files* lists everything (filter by project) with size, date and user. Clicking a name downloads it; the download requires login and is always served as an attachment (never rendered in the page). Treat files as untrusted (macro-enabled Office files, etc.).
 3. Admin and Project manager can attach to any task and delete any file; a Researcher can attach to tasks assigned to them and delete files they added. Deleting a task deletes its files from the server.
-4. File names are sanitised (characters illegal in file names become `_`). The *Attachments* column of the Excel export lists the file names per task.
+4. The name you give is only a display name; the download keeps the original file name (shown in brackets when it differs). File names are sanitised (characters illegal in file names become `_`). The *Attachments* column of the Excel export lists the file names per task.
 
 ## 4. Requests (intake)
 
@@ -72,14 +73,19 @@ Triage queue: PM/Admin choose an assignee and **Accept** → status *To do*. Vie
 
 External users cannot reach the form: data is local to the browser.
 
-## 5. Portfolio and goals
+## 5. Projects
 
+Work → **Projects** lists all projects: status, progress, period, tasks done and activities done. **Click a project** to open it: its tasks with their activities, tick boxes for tasks and activities, a field to add a task (`Run DSC @Rossi #3 !high due:2026-12-18`, Enter) and, under each task, a field to add an activity (Enter). *← All projects* goes back; *show completed tasks* shows finished ones.
+
+- Add a project with *+ Project* or build everything at once with **Quick add** (§3c).
 - Project status: *Auto* (Done if all tasks Done; *At risk* if any open task is overdue; else *On track*) or manual override (*On track, At risk, On hold, Done*).
-- Progress = Σ estimated hours of Done tasks / Σ estimated hours (tasks with 0 h count as 1).
-- Goal progress = mean progress of linked projects; flagged *past due* when target < today and < 100 %.
+- Progress = Done tasks / tasks (weighted by estimated hours where they exist, otherwise each task counts 1).
 - *Notes* opens (or creates) the project's note document.
+- The *Goals* box of earlier versions was removed (existing goals stay in the data).
 
-## 6. Templates
+## 6. Templates (Settings → Templates)
+
+Templates live in the Settings page (gear icon → *Templates*) and are not part of the daily workflow for now.
 
 A template is a named list of steps: title, duration in working days, estimated hours, optional *Instrument*, and the earlier steps each one must wait for (finish-to-start). Five laboratory templates are provided the first time a database is created; afterwards they are ordinary records that Admin and Project manager can edit, duplicate and delete (they are not restored automatically once deleted).
 
@@ -97,41 +103,40 @@ A template is a named list of steps: title, duration in working days, estimated 
 
 **Use**
 - *To a project* (Templates page → *Use template*): choose *New project* (name) or an *Existing* project, and the start date. The steps become dependent tasks scheduled forward on working days (each starts after its latest predecessor), then Tasks → Timeline opens. Estimated hours and *Instrument* values are pre-filled; assignees are not.
-- *To a single task* (task panel → *Add template steps*): the steps are created in the task’s project and noted “From template …”. Placement: **After this task** (steps without predecessors start when the task ends), **Before this task** (steps start at the task’s start date; the task waits for the last steps and moves later if needed), or **Independent** (no link).
 
 Standards: https://www.astm.org · https://www.iso.org. Templates only cite the standard number; verify method parameters against the current edition.
 
 ## 3c. Quick add, ticking and team progress
 
-**Quick add** (Tasks page → *Quick add*, Admin / Project manager) creates projects, tasks, subtasks and activities in one go from an outline. Fill the project name (an existing one is reused, a new name creates it) and a start date, then type or paste:
+**Quick add** (Projects or Tasks page → *Quick add*, Admin / Project manager) creates projects, tasks and activities in one go from an outline. Fill the project name (an existing one is reused, a new name creates it) and a start date, then type or paste:
 
 ```
 # DSC campaign
-Prepare samples @Rossi #2 ~6h !high
-  Weigh 8 specimens #1 ~2h
-  Condition 48 h #2
-  - Check balance calibration
-Run DSC @Rossi #3 ~12h due:2026-12-18
+Prepare samples @Rossi #2 !high
+  Weigh 8 specimens
+  Condition 48 h
   - [x] Label vials
+Run DSC @Rossi #3 due:2026-12-18
+  Calibrate In/Zn
 ```
 
 | Line | Result |
 |---|---|
 | `# Name` | starts / selects a project (several allowed; optional if the Project field is filled) |
 | normal line | a **task** |
-| indented line under a task | a **subtask** (the task then spans its subtasks) |
-| `- text`, `* text`, `[ ] text` | an **activity** of the task or subtask above (`[x]` = already done) |
-| `@name` | assignee: first user whose name contains the text; subtasks inherit the task’s assignee |
+| indented line under a task, or `- text`, `* text`, `[ ] text` | an **activity** of the task above (`[x]` = already done) |
+| `@name` | assignee: first user whose name contains the text |
 | `#N` | duration in working days (default 1) |
-| `~Nh` | estimated hours (`~1.5h` or `~1,5h`) |
 | `!low` `!med` `!high` `!crit` | priority (default Medium) |
 | `start:YYYY-MM-DD` `due:YYYY-MM-DD` | explicit dates |
 
-Tokens are removed from the title. Without `start:` tasks begin on the start date (next working day if weekend). Nothing is created when a line cannot be placed (for example a task before any project name), and activity lines without a task are skipped and counted in the message. Other ways to enter work: *+ Task* for a single task, *Add subtask* / *Add an activity* in the task panel (Researchers can do this on their own tasks), Templates (§6).
+Tokens are removed from the title. Without `start:` tasks begin on the start date (next working day if weekend). Nothing is created when a line cannot be placed (for example a task before any project name); activity lines without a task are skipped and counted in the message. The project opens afterwards. Other ways to enter work: *+ Project*, the add-task field in a project, *+ Task*, and the add-activity fields (Researchers can add activities to their own tasks).
 
-**Ticking done.** Tick a task or subtask in the list, in the task panel or in *Team progress*; tick activities in the task panel or in *Team progress*. Ticking is allowed to Admin, Project manager and to the assignee; Viewers cannot.
+**Ticking done.** Tick a task in the project, the task list, the task window or *Team progress*; tick activities in the project, the task window or *Team progress*. Allowed to Admin, Project manager and the assignee; Viewers cannot.
 
-**Team progress** (Work → Team progress) shows, per person and optionally per project: tasks done / total, activities done / total, open and overdue tasks, hours logged by the person and hours estimated for the tasks assigned to them, with a progress bar each, followed by one card per person listing their open tasks (completed ones on request) with tick boxes and activities. Counting rule: **tasks are counted at the lowest level** — a task with subtasks is represented by its subtasks, so work is never counted twice; the same rule applies to the dashboard indicators, hours per project, workload and project progress. A dashboard widget *Progress by person* summarises the same figures.
+**Team progress** (Work → Team progress, right under Dashboard) shows, per person and optionally per project: tasks done / total, activities done / total, open and overdue tasks, each with a progress bar, followed by one card per person listing their open tasks (completed ones on request) with tick boxes and activities. A dashboard widget *Progress by person* summarises the same figures.
+
+*Subtasks* introduced in 2.0.0-beta.5 are no longer offered: use activities. Subtasks that already exist keep working (indented in the list; the task follows them).
 
 ## 7. Automations
 
@@ -163,15 +168,14 @@ Only PM/Admin can create, toggle or remove rules.
 
 Markdown-lite: `# / ## / ###` headings, `- ` lists, `**bold**`, `` `code` ``, bare `http(s)` links. Linked to a project and optionally a task (a task link overrides the project). Preview is live. Viewer is read-only.
 
-## 9. Settings
+## 9. Settings page
 
-- **Users and roles**, weekly capacity (h/week) — Admin only.
-- **Custom fields** — PM/Admin. Types: text, number, select (comma-separated options), date, checkbox, formula.
-  - Formula: `+ − × ÷`, parentheses, decimals; variables `{est}`, `{logged}`, and the name of any *number* field, e.g. `{est}/{No. of samples}`. Missing/non-numeric input → `—`.
-  - The fields named *Instrument*, *No. of samples*, *Lot* are used by conflicts, workload views and the intake form; renaming or deleting them disables those features.
-- **Integrations** — *Copy ICS calendar* (all-day VEVENT on due date, open tasks), *Copy JSON backup* (clipboard).
-- **Activity log** — changes received in this browser session (last 40 of 300); the full trail is kept by the server (Admin / Project manager: `GET /api/audit`).
-- **Create account** (Admin): name, username (3+ characters), password (10+), role. *Reset password* signs that user out.
+The gear icon in the top bar opens one page with four tabs:
+
+- **Settings** — *Users and roles* and weekly capacity (Admin only; create accounts, reset passwords); *Custom fields* (PM/Admin; types text, number, select, date, checkbox, formula — variables `{est}`, `{logged}` and number fields); *Integrations* (copy ICS calendar, copy JSON); *Activity log* (changes received in this browser session; the full trail is in the server audit).
+- **Data & sync** — status, account, export / import, backups, empty database (§11).
+- **Templates** — edit, duplicate, delete, create and apply templates (§6).
+- **Info & license** — author, license, references.
 
 ## 10. Roles
 
@@ -216,7 +220,7 @@ If no LabPM server answers, the page asks for the shared folder (README, option 
 - **Who are you?** instead of a login: pick your name, or *I am new here*. *Switch user* in the top bar changes identity. Settings → *Add person* creates colleagues (no passwords). Roles shape the interface but are **not** access control.
 - Changes of other PCs appear after ~4 s. The status line reads *Shared folder · synced hh:mm:ss*.
 - Date cascade, automations and the overdue check run in your browser. The first PC to notice an overdue task fires its rule.
-- Files are copied to `attachments/` in the folder; backups are daily JSON copies in `backups/` (Data & sync → Backups, Admin; restore replaces all records).
+- Files are copied to `attachments/` in the folder; backups are daily JSON copies in `backups/` (Settings → Data & sync → Backups, Admin; restore replaces all records).
 - Import / export work on JSON files as in server mode; there is no audit page.
 - Editing needs Chrome or Edge; after a browser restart use *Reconnect folder*.
 - **Firefox and Safari:** *Open folder read-only…* shows projects, tasks, documents and files as they were when you opened the folder (everything is view-only, whatever your role; *Reload folder* in Data & sync re-reads it). Creating the first Admin or adding people needs Chrome/Edge or the server. With the LabPM server all browsers can edit.

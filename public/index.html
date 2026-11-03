@@ -4,7 +4,7 @@ Copyright (c) 2026 Flavio Pendolino
 https://www.apache.org/licenses/LICENSE-2.0
 
 Author: Flavio Pendolino
-Version: 2.0.0-beta.4
+Version: 2.0.0-beta.5
 License: Apache License 2.0
 Commercial use: permitted under the Apache License 2.0
 Purpose: Project, task, resource and request management for a chemical/polymer laboratory.
@@ -47,7 +47,7 @@ h1{font-size:28px}h2{font-size:17px}h3{font-size:15px}
 .who{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0;box-shadow:0 1px 2px var(--wk)}
 .card h2{margin-bottom:14px}
-.muted{color:var(--muted)}.dn{text-decoration:line-through;opacity:.65}.chkc{width:28px}.pl{padding:6px 0;border-bottom:1px solid var(--line)}.pa{display:flex;flex-direction:column;gap:2px;padding:4px 0 0 28px}.mono{font-family:var(--f-m);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.nv.sub{padding-left:30px;font-size:13px}.btn.icon{padding:6px 8px;display:inline-flex;align-items:center;justify-content:center}tr.clk{cursor:pointer}tr.clk:hover{background:var(--surface2)}.dn{text-decoration:line-through;opacity:.65}.chkc{width:28px}.pl{padding:6px 0;border-bottom:1px solid var(--line)}.lst>.pl{display:block}.pa{display:flex;flex-direction:column;gap:2px;padding:4px 0 0 28px}.mono{font-family:var(--f-m);font-variant-numeric:tabular-nums}
 .small{font-size:12px}
 input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%;min-width:0}
 input[type=checkbox]{width:auto}
@@ -376,7 +376,7 @@ var N = {
       return s;
     }) };
   },
-  files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
+  files: function (o) { return { id: o.id, taskId: idOrNull(o.taskId), projectId: idOrNull(o.projectId), name: str(o.name, 255), title: str(o.title, 200).trim() || str(o.name, 255), path: str(o.path, 400), size: num(o.size, 0), type: str(o.type, 120), added: isFinite(+o.added) ? +o.added : Date.now(), by: idOrNull(o.by) }; }
 };
 
 function normalize(kind, o) {
@@ -499,9 +499,9 @@ var SCOL={'Triage':'--s0','To do':'--s1','In progress':'--s2','In review':'--s3'
 var PRIOS=['Low','Medium','High','Critical'];
 var ROLES=['Admin','Project manager','Researcher','Viewer'];
 var TOOLS=['DSC','TGA','FTIR','Rheometer','Extruder','MFR','Tensile tester','OTR','Other'];
-var NAV=[['Work',[['dashboard','Dashboard'],['tasks','Tasks'],['progress','Team progress'],['files','Files'],['requests','Requests']]],['Planning',[['portfolio','Portfolio'],['templates','Templates'],['automations','Automations'],['docs','Documents']]],['System',[['session','Data & sync'],['settings','Settings'],['info','Info & license']]]];
-var NAVFLAT=[].concat.apply([],NAV.map(function(g){return g[1]}));
-var DESC={progress:'Who has done what: tasks, subtasks and activities per person.',dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Files attached to tasks and projects, stored on the LabPM server.',portfolio:'Project progress and goals.',templates:'Start a project from a ready-made scheme.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',session:'Save your work, reopen it later or move it to another computer.',settings:'People, roles, custom fields and integrations.',info:'Author, license and references.'};
+var NAV=[['Work',[['dashboard','Dashboard'],['progress','Team progress'],['projects','Projects',[['tasks','Tasks']]],['files','Files'],['requests','Requests']]],['Planning',[['automations','Automations'],['docs','Documents']]]];
+var NAVFLAT=[['settings','Settings']];NAV.forEach(function(g){g[1].forEach(function(n){NAVFLAT.push([n[0],n[1]]);(n[2]||[]).forEach(function(c){NAVFLAT.push([c[0],c[1]])})})});
+var DESC={progress:'Who has done what: tasks and activities per person.',dashboard:'Project status, deadlines and team workload.',tasks:'Tasks across all projects: pick the view you prefer.',requests:'Analysis requests and triage queue.',files:'Files attached to tasks and projects, stored on the LabPM server.',projects:'Projects, their tasks and activities: click a project to open it.',automations:'Rules that update tasks automatically.',docs:'Notes and documents linked to projects and tasks.',settings:'People and roles, custom fields, data & sync, templates, license and information.'};
 var TVIEWS=[['list','List'],['board','Board'],['timeline','Timeline'],['calendar','Calendar'],['workload','Workload']];
 var WN={kpi:'Indicators',status:'Task status',hours:'Hours per project',load:'6-week workload',upcoming:'Upcoming deadlines',conflicts:'Instrument conflicts',assistant:'Project summary',progress:'Progress by person'};
 
@@ -538,7 +538,7 @@ var CID=uid('c'),ME=null,REV={},SHADOW={},SY={st:'boot',last:0,busy:false,dirty:
 function api(method,path,body,rev){var h={'X-Client-Id':CID};if(body!==undefined)h['Content-Type']='application/json';if(rev!=null)h['If-Match']=String(rev);
   return fetch(path,{method:method,headers:h,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {s:r.status,j:j}})})}
 function uiKey(){return 'labpm2_ui_'+(ME?ME.id:'')}
-function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null,tpledit:null,tpldel:null})}catch(e){}return defaultUI()}
+function loadUi(){try{var r=JSON.parse(localStorage.getItem(uiKey()));if(r&&typeof r==='object'){var mv={portfolio:'projects',templates:'settings',session:'settings',info:'settings'};if(mv[r.view]){r.stab={templates:'templates',session:'data',info:'info'}[r.view]||'general';r.view=mv[r.view]}}if(r&&typeof r==='object')return Object.assign(defaultUI(),r,{drawer:null,confirmDel:null,confirmClear:false,rb:defaultUI().rb,tpl:null,tpledit:null,tpldel:null})}catch(e){}return defaultUI()}
 function savedText(){var t=SY.last?hhmm(SY.last):'',m={boot:'Connecting…',ok:MODE==='folder'?(FB.ro?'Read-only · folder loaded '+t:'Shared folder · synced '+t):'Synced '+t,sync:'Syncing…',off:'Offline: retrying, changes kept in this page',err:SY.msg||'Sync error'};return m[SY.st]||''}
 function hhmm(ts){return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function svStatus(st,msg){SY.st=st;SY.msg=msg||'';var el=document.getElementById('sv');if(el)el.textContent=savedText()}
@@ -636,8 +636,9 @@ async function openFolder(h){FB.h=h;FB.logs=await h.getDirectoryHandle('log',{cr
   S=foldState();await compactOwn();folderIdentity()}
 async function readLogs(){var changed=[],own=FB.dev+'.jsonl';
   for await(var ent of FB.logs.entries()){var name=ent[0],fh=ent[1];if(fh.kind!=='file'||!/\.jsonl$/.test(name))continue;if(FB.booted&&name===own)continue;
-    var f=await fh.getFile(),c=FB.files[name];if(c&&c.size===f.size&&c.mtime===f.lastModified)continue;FB.files[name]={size:f.size,mtime:f.lastModified};
-    LabFold.parseLog(await f.text()).forEach(function(o){var k=FB.fold.apply(o);if(k)changed.push([k,o])})}
+    try{var f=await fh.getFile(),c=FB.files[name];if(c&&c.size===f.size&&c.mtime===f.lastModified)continue;var txt=await f.text();FB.files[name]={size:f.size,mtime:f.lastModified};
+      LabFold.parseLog(txt).forEach(function(o){var k=FB.fold.apply(o);if(k)changed.push([k,o])})}
+    catch(e){/* file replaced or locked while we looked (its owner is writing): read it again at the next poll */}}
   return changed}
 function foldState(){var st={v:1,me:'',users:[],projects:[],tasks:[],fields:[],rules:[],goals:[],docs:[],templates:[],files:[],activity:[],ui:defaultUI(),demo:false};
   FB.fold.keys().forEach(function(kk){var i=kk.indexOf('/'),k=kk.slice(0,i),id=kk.slice(i+1);if(!Array.isArray(st[k]))return;var d=FB.fold.get(k,id);if(d)st[k].push(d)});
@@ -686,9 +687,9 @@ function folderSync(){if(FB.ro)return;if(SY.busy){SY.dirty=true;return}runLocalL
    .then(function(){SY.busy=false;if(SY.pend){SY.pend=false;softRender()}if(SY.dirty)syncSchedule()})}
 function folderFileAdd(rec){S.files.push(rec);return emitOps([mkOp('files',rec.id,Object.assign({},rec),false,true)])}
 function folderFileDel(f){S.files=S.files.filter(function(x){return x.id!==f.id});FB.att.removeEntry(f.id).catch(function(){});return emitOps([mkOp('files',f.id,undefined,true)])}
-async function folderUpload(list,taskId,projectId){var n=0;for(var i=0;i<list.length;i++){var f=list[i];if(f.size>MAXUP){toast('"'+f.name+'" exceeds 25 MB.');continue}
+async function folderUpload(list,taskId,projectId,titles){titles=titles||[];var n=0;for(var i=0;i<list.length;i++){var f=list[i];if(f.size>MAXUP){toast('"'+f.name+'" exceeds 25 MB.');continue}
   try{var id=uid('f'),fh=await FB.att.getFileHandle(id,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
-    var t=taskId&&T(taskId);await folderFileAdd({id:id,taskId:taskId||null,projectId:projectId||(t&&t.projectId)||null,name:f.name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').slice(0,200)||'file',path:'',size:f.size,type:(f.type||'').slice(0,120),added:Date.now(),by:ME.id});n++}
+    var t=taskId&&T(taskId),nm=f.name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').slice(0,200)||'file';await folderFileAdd({id:id,taskId:taskId||null,projectId:projectId||(t&&t.projectId)||null,name:nm,title:((titles[i]||'').replace(/[\u0000-\u001f]+/g,' ').trim().slice(0,200))||nm,path:'',size:f.size,type:(f.type||'').slice(0,120),added:Date.now(),by:ME.id});n++}
   catch(e){toast('Upload failed: '+f.name+' ('+((e&&e.message)||e)+')')}}
   if(n){log(n+' file(s) attached');toast(n+' file(s) uploaded.');renderBody();renderDrawer()}}
 function exportObj(){var o={v:1};COLS.forEach(function(k){o[k]=JSON.parse(JSON.stringify(S[k]))});o.files=JSON.parse(JSON.stringify(S.files));return o}
@@ -787,19 +788,21 @@ var uOpts=function(){return [['','— none —']].concat(S.users.map(function(u)
 function render(){
   var v=S.ui.view,titles={};NAVFLAT.forEach(function(n){titles[n[0]]=n[1]});
   var rt=S.tasks.find(function(t){return t.timer&&t.timer.user===S.me});
-  var nav=NAV.map(function(g){return '<div class="ng">'+g[0]+'</div>'+g[1].map(function(n){return '<button class="nv" data-act="nav" data-v="'+n[0]+'"'+(v===n[0]?' aria-current="page"':'')+'>'+n[1]+'</button>'}).join('')}).join('');
+  var nvb=function(n,sub){return '<button class="nv'+(sub?' sub':'')+'" data-act="nav" data-v="'+n[0]+'"'+(v===n[0]?' aria-current="page"':'')+'>'+n[1]+'</button>'};
+  var nav=NAV.map(function(g){return '<div class="ng">'+g[0]+'</div>'+g[1].map(function(n){return nvb(n,false)+(n[2]||[]).map(function(c){return nvb(c,true)}).join('')}).join('')}).join('');
   var th=[['light','Light'],['dark','Dark'],['auto','Auto']].map(function(x){return '<button data-act="theme" data-v="'+x[0]+'" aria-pressed="'+(S.ui.theme===x[0])+'">'+x[1]+'</button>'}).join('');
-  $('#app').innerHTML='<div class="app"><nav class="side" aria-label="Sections"><div class="brand">LabPM<small>v2.0 · chemical laboratory</small></div>'+nav+
-    '<div class="sess"><div class="small muted" id="sv">'+esc(savedText())+'</div><button class="btn sm" data-act="nav" data-v="session">Save or open session</button></div></nav>'+
+  $('#app').innerHTML='<div class="app"><nav class="side" aria-label="Sections"><div class="brand">LabPM<small>v2.0</small></div>'+nav+
+    '<div class="sess"><div class="small muted" id="sv">'+esc(savedText())+'</div></div></nav>'+
     '<main class="main"><header class="top"><div><h1>'+esc(titles[v])+'</h1><p class="sub">'+esc(DESC[v]||'')+'</p></div><div class="topr">'+
     (rt?'<button class="btn tmr" id="tb" data-act="open" data-id="'+rt.id+'"><span class="rec"></span><span id="tbt">'+elapsed(rt)+'</span></button>':'')+
+    '<button class="btn icon" data-act="nav" data-v="settings" title="Settings, data &amp; sync, templates, info &amp; license" aria-label="Settings"'+(v==='settings'?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>'+
     '<div class="seg" role="group" aria-label="Theme">'+th+'</div>'+
     '<span class="who">'+esc(me().name)+' · '+esc(me().role)+' <button class="btn sm" data-act="logout">'+(MODE==='folder'?'Switch user':'Sign out')+'</button></span></div></header>'+
     '<div id="vb">'+body()+'</div>'+
     '<footer class="foot">© 2026 Flavio Pendolino | <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a> · LabPM v2.0 · '+(MODE==='folder'?'shared folder '+esc(FB.h.name):'shared database on the LabPM server')+'</footer></main></div>'}
 function renderBody(){var e=$('#vb');if(e)e.innerHTML=body()}
 function commit(){save();renderBody();renderDrawer();var tb=$('#tb');if(!tb&&S.tasks.some(function(t){return t.timer&&t.timer.user===S.me})||tb&&!S.tasks.some(function(t){return t.timer&&t.timer.user===S.me}))render()}
-function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'portfolio':return vPort();case 'tasks':return vTasks();case 'requests':return vReq();case 'progress':return vProgress();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'templates':return vTpl();case 'session':return vSession();case 'settings':return vSet();default:return vInfo()}}
+function body(){switch(S.ui.view){case 'dashboard':return vDash();case 'projects':return vProjects();case 'tasks':return vTasks();case 'requests':return vReq();case 'progress':return vProgress();case 'files':return vFiles();case 'docs':return vDocs();case 'automations':return vAuto();case 'settings':return vSettingsPage();default:return vDash()}}
 
 /* ---------- dashboard ---------- */
 function wKpi(){var op=leafTasks().filter(function(t){return t.status!=='Done'}),ov=op.filter(isOver).length,bl=op.filter(isBlocked).length;
@@ -828,17 +831,23 @@ function wAssist(){var pid=S.ui.ap||(S.projects[0]&&S.projects[0].id);
 function vDash(){var W=S.ui.widgets,fn={kpi:wKpi,status:wStatus,hours:wHours,load:wLoad,upcoming:wUp,conflicts:wConf,assistant:wAssist,progress:wProg};
   return '<details class="wcfg"><summary>Visible widgets</summary>'+Object.keys(WN).map(function(k){return '<label><input type="checkbox" data-ch="widget" data-k="'+k+'"'+(W[k]?' checked':'')+'> '+WN[k]+'</label>'}).join('')+'</details><div class="wgrid">'+Object.keys(WN).filter(function(k){return W[k]}).map(function(k){return fn[k]()}).join('')+'</div>'}
 
-/* ---------- portfolio and goals ---------- */
-function vPort(){
-  var rows=S.projects.map(function(p){var ts=leafTasks().filter(function(t){return t.projectId===p.id}),h=pHealth(p),pg=pProgress(p.id);
-    var s=ts.map(function(t){return t.start}).sort()[0],d=ts.map(function(t){return t.due}).sort().slice(-1)[0];
-    return '<tr><td>'+pdot(p)+'<b>'+esc(p.name)+'</b></td><td><select data-ch="pstat" data-id="'+p.id+'"'+(isPM()?'':' disabled')+'>'+opt([['auto','Auto: '+(pHealth(Object.assign({},p,{status:'auto'})))],'On track','At risk','On hold','Done'],p.status||'auto')+'</select></td><td style="min-width:130px"><div class="bar'+(h==='At risk'?' b':'')+'"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></td><td class="mono small">'+fd(s)+' → '+fd(d)+'</td><td class="mono">'+ts.filter(function(t){return t.status!=='Done'}).length+' open, '+ts.filter(isOver).length+' overdue</td><td class="mono">'+nf(ts.reduce(function(a,t){return a+logged(t)},0))+' / '+nf(ts.reduce(function(a,t){return a+t.est},0))+' h</td><td><button class="btn sm" data-act="projdoc" data-id="'+p.id+'">Notes</button></td></tr>'}).join('');
-  var goals=S.goals.map(function(g){var pg=g.pids.length?Math.round(g.pids.reduce(function(a,id){return a+pProgress(id)},0)/g.pids.length):0,late=g.target<TODAY()&&pg<100;
-    return '<div style="display:block"><div class="row"><b class="grow">'+esc(g.name)+'</b><span class="small mono">by '+fd(g.target)+'</span>'+(late?'<span class="flag bad">past due</span>':'')+(isPM()?'<button class="btn sm dng" data-act="goaldel" data-id="'+g.id+'">Remove</button>':'')+'</div><div class="small muted">'+g.pids.map(function(id){return esc((P(id)||{}).name)}).join(', ')+'</div><div class="bar" style="margin-top:4px"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></div>'}).join('');
-  return '<div class="tbw"><table class="tbl"><thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Period</th><th>Tasks</th><th>Hours</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-   (isPM()?'<section class="card"><h2>New project</h2><div class="tools"><input id="np-name" placeholder="Project name" style="flex:1;min-width:200px"><button class="btn pri" data-act="projadd">Add</button></div></section>':'')+
-   '<section class="card"><h2>Goals</h2><div class="lst">'+(goals||'<p class="muted">No goals.</p>')+'</div>'+
-   (isPM()?'<div class="form" style="margin-top:12px"><label>Goal<input id="ng-name" placeholder="E.g. Validate the FTIR method"></label><label>Due date<input type="date" id="ng-date" value="'+addD(TODAY(),30)+'"></label><label>Linked projects<select id="ng-p" multiple size="3">'+opt(pOpts())+'</select></label><label class="full"><button class="btn pri" data-act="goaladd" style="width:max-content">Add goal</button></label></div>':'')+'<p class="small muted" style="margin:10px 0 0">Progress is the average of the linked projects, weighted by task estimated hours.</p></section>'}
+/* ---------- projects ---------- */
+function vProjects(){var det=S.ui.pdet&&P(S.ui.pdet);if(det)return vProjectDetail(det);
+  var leaf=leafTasks(),rows=S.projects.map(function(p){var ts=leaf.filter(function(t){return t.projectId===p.id}),h=pHealth(p),pg=pProgress(p.id),a=0,ad=0;
+    S.tasks.filter(function(t){return t.projectId===p.id}).forEach(function(t){acts(t).forEach(function(c){a++;if(c.done)ad++})});
+    var s0=ts.map(function(t){return t.start}).sort()[0],d0=ts.map(function(t){return t.due}).sort().slice(-1)[0],dn=ts.filter(function(t){return t.status==='Done'}).length,ov=ts.filter(isOver).length;
+    return '<tr class="clk" data-act="popen" data-id="'+p.id+'" tabindex="0"><td>'+pdot(p)+'<b>'+esc(p.name)+'</b></td><td data-stop><select data-ch="pstat" data-id="'+p.id+'" aria-label="Status"'+(isPM()?'':' disabled')+'>'+opt([['auto','Auto: '+(pHealth(Object.assign({},p,{status:'auto'})))],'On track','At risk','On hold','Done'],p.status||'auto')+'</select></td><td style="min-width:130px"><div class="bar'+(h==='At risk'?' b':'')+'"><i style="width:'+pg+'%"></i></div><span class="small mono">'+pg+'%</span></td><td class="mono small">'+(ts.length?fd(s0)+' → '+fd(d0):'—')+'</td><td class="mono">'+dn+' / '+ts.length+' tasks'+(a?' · ☑ '+ad+' / '+a:'')+(ov?' <span class="flag bad">'+ov+' overdue</span>':'')+'</td><td data-stop><button class="btn sm" data-act="projdoc" data-id="'+p.id+'">Notes</button></td></tr>'}).join('');
+  return (isPM()?'<div class="tools"><input id="np-name" placeholder="New project name" aria-label="New project name" style="flex:1;min-width:200px"><button class="btn pri" data-act="projadd">+ Project</button><button class="btn" data-act="qa" aria-pressed="'+(!!S.ui.qa)+'">Quick add</button></div>':'')+(S.ui.qa&&isPM()?vQuick():'')+
+   '<div class="tbw"><table class="tbl"><thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Period</th><th>Tasks · activities done</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="muted">No projects yet.'+(isPM()?' Add one above or use Quick add.':'')+'</td></tr>')+'</tbody></table></div>'+
+   (S.projects.length?'<p class="small muted">Click a project to open its tasks and activities.</p>':'')}
+function vProjectDetail(p){var u=S.ui,all=S.tasks.filter(function(t){return t.projectId===p.id}),leaf=leafTasks().filter(function(t){return t.projectId===p.id}),pg=pProgress(p.id),h=pHealth(p),a=0,ad=0;
+  all.forEach(function(t){acts(t).forEach(function(c){a++;if(c.done)ad++})});
+  var list=orderTree(all.slice().sort(function(x,y){return x.due<y.due?-1:x.due>y.due?1:0})).filter(function(t){return u.pdone||t.status!=='Done'});
+  return '<div class="tools"><button class="btn" data-act="pclose">← All projects</button><label class="small"><input type="checkbox" data-ch="pdone"'+(u.pdone?' checked':'')+'> show completed tasks</label></div>'+
+   '<section class="card"><div class="row"><h2 class="grow" style="margin:0">'+pdot(p)+esc(p.name)+'</h2><select data-ch="pstat" data-id="'+p.id+'" aria-label="Status"'+(isPM()?'':' disabled')+'>'+opt([['auto','Auto: '+(pHealth(Object.assign({},p,{status:'auto'})))],'On track','At risk','On hold','Done'],p.status||'auto')+'</select><button class="btn sm" data-act="projdoc" data-id="'+p.id+'">Notes</button></div>'+
+   '<div class="bar'+(h==='At risk'?' b':'')+'" style="margin:8px 0 4px"><i style="width:'+pg+'%"></i></div><div class="small muted">'+pg+'% · '+leaf.filter(function(t){return t.status==='Done'}).length+' of '+leaf.length+' tasks done'+(a?' · '+ad+' of '+a+' activities done':'')+'</div></section>'+
+   '<section class="card"><h2>Tasks and activities</h2>'+(isPM()?'<input data-enter="taskadd" data-pid="'+p.id+'" placeholder="Add a task and press Enter — e.g. Run DSC @Rossi #3 !high due:2026-12-18" style="width:100%;margin-bottom:8px" aria-label="Add a task">':'')+
+   (list.length?'<div class="lst" style="display:block">'+list.map(function(t){return taskLine(t,true,true)}).join('')+'</div>':'<p class="muted">'+(all.length?'All tasks are done (tick “show completed tasks”).':'No tasks yet.')+'</p>')+'</section>'}
 
 /* ---------- tasks: toolbar and views ---------- */
 function filtered(){var q=S.ui.q.toLowerCase();return S.tasks.filter(function(t){return (!S.ui.fp||t.projectId===S.ui.fp)&&(!S.ui.fa||(S.ui.fa==='_'?!t.assignee:t.assignee===S.ui.fa))&&(!S.ui.fs||t.status===S.ui.fs)&&(!S.ui.fpr||t.priority===S.ui.fpr)&&(!S.ui.fdf||t.due>=S.ui.fdf)&&(!S.ui.fdt||t.due<=S.ui.fdt)&&(!q||(t.title+' '+t.tags.join(' ')).toLowerCase().indexOf(q)>=0)})}
@@ -970,17 +979,18 @@ function parseQuick(s){var o={title:'',assignee:undefined,days:0,est:0,prio:'',s
 function mkTaskQuick(q,pid,parent,base){var s0=normWD(q.start&&DT.test(q.start)?q.start:base),d0=q.due&&DT.test(q.due)?q.due:addWD(s0,Math.max((q.days||1)-1,0));if(d0<s0)d0=s0;
   return newTask({projectId:pid,title:q.title||'New task',status:'To do',assignee:q.assignee!==undefined?q.assignee:(parent?parent.assignee:null),priority:q.prio||'Medium',start:s0,due:d0,est:q.est||0,parent:parent?parent.id:null})}
 /* outline: "# Project" / task / indented subtask / "- activity" */
-function parseOutline(text){var items=[],last=null,top=null;
+function parseOutline(text){var items=[],top=null;
   text.split(/\r?\n/).forEach(function(raw){if(!raw.trim())return;var line=raw.replace(/\t/g,'    '),ind=/^ */.exec(line)[0].length,s0=line.trim(),m;
-    if(/^#{1,3}\s+\S/.test(s0)){items.push({k:'project',name:s0.replace(/^#+\s+/,'').trim()});top=null;last=null;return}
-    if((m=/^(?:[-*•]|\[( |x|X)\])\s+(.*)$/.exec(s0))){if(!last){items.push({k:'warn',text:s0});return}var tx=(m[2]||'').trim(),dn=m[1]==='x'||m[1]==='X',mm=/^\[( |x|X)\]\s+(.*)$/.exec(tx);if(mm){tx=mm[2];dn=dn||mm[1]!==' '}items.push({k:'act',t:tx.slice(0,300),done:dn,of:last});return}
-    var q=parseQuick(s0),it;if(ind>0&&top){it={k:'sub',q:q,parent:top}}else{it={k:'task',q:q};top=it}items.push(it);last=it});
+    if(/^#{1,3}\s+\S/.test(s0)){items.push({k:'project',name:s0.replace(/^#+\s+/,'').trim()});top=null;return}
+    if((m=/^(?:[-*•]|\[( |x|X)\])\s+(.*)$/.exec(s0))){if(!top){items.push({k:'warn',text:s0});return}var tx=(m[2]||'').trim(),dn=m[1]==='x'||m[1]==='X',mm=/^\[( |x|X)\]\s+(.*)$/.exec(tx);if(mm){tx=mm[2];dn=dn||mm[1]!==' '}items.push({k:'act',t:tx.slice(0,300),done:dn,of:top});return}
+    if(ind>0&&top){items.push({k:'act',t:s0.slice(0,300),done:false,of:top});return}
+    top={k:'task',q:parseQuick(s0)};items.push(top)});
   return items}
-function vQuick(){var sel=(S.ui.fp&&P(S.ui.fp)?P(S.ui.fp).name:(S.projects[0]?S.projects[0].name:''));
+function vQuick(){var sel=(S.ui.pdet&&P(S.ui.pdet)?P(S.ui.pdet).name:(S.ui.fp&&P(S.ui.fp)?P(S.ui.fp).name:(S.projects[0]?S.projects[0].name:'')));
   return '<section class="card"><h2>Quick add</h2><div class="form"><label>Project (existing name or a new one)<input id="qa-p" list="qa-pl" value="'+esc(sel)+'" autocomplete="off"><datalist id="qa-pl">'+S.projects.map(function(p){return '<option value="'+esc(p.name)+'">'}).join('')+'</datalist></label><label>Start date<input type="date" id="qa-d" value="'+normWD(TODAY())+'"></label>'+
-   '<label class="full">Outline — one line each<textarea id="qa-t" rows="9" spellcheck="false" placeholder="# DSC campaign&#10;Prepare samples @Rossi #2 ~6h !high&#10;  Weigh 8 specimens @Bianchi #1 ~2h&#10;  Condition 48 h #2&#10;  - Check balance calibration&#10;  - [x] Label vials&#10;Run DSC @Rossi #3 ~12h due:2026-12-18"></textarea></label>'+
+   '<label class="full">Outline — one line each<textarea id="qa-t" rows="9" spellcheck="false" placeholder="# DSC campaign&#10;Prepare samples @Rossi #2 !high&#10;  Weigh 8 specimens&#10;  Condition 48 h&#10;  - [x] Label vials&#10;Run DSC @Rossi #3 due:2026-12-18&#10;  Calibrate In/Zn"></textarea></label>'+
    '<label class="full"><span class="row"><button class="btn pri" data-act="qacreate">Create</button><button class="btn" data-act="qa">Close</button></span></label></div>'+
-   '<ul class="small muted"><li><span class="mono"># Name</span> starts or selects a project (optional if the field above is filled).</li><li>A normal line is a <b>task</b>; an <b>indented</b> line below it is a <b>subtask</b> (the task then spans its subtasks).</li><li><span class="mono">- text</span>, <span class="mono">* text</span> or <span class="mono">[ ] text</span> is an <b>activity</b> (checklist item) of the task or subtask above; <span class="mono">[x]</span> is already done.</li><li>Options on task lines: <span class="mono">@surname</span> assignee (subtasks inherit it) · <span class="mono">#3</span> working days · <span class="mono">~6h</span> estimate · <span class="mono">!high</span> priority · <span class="mono">start:2026-12-01</span> <span class="mono">due:2026-12-18</span>.</li></ul></section>'}
+   '<ul class="small muted"><li><span class="mono"># Name</span> starts or selects a project (optional if the field above is filled).</li><li>A normal line is a <b>task</b>. Every <b>indented</b> line below it, or a line starting with <span class="mono">-</span>, <span class="mono">*</span> or <span class="mono">[ ]</span>, is an <b>activity</b> of that task (<span class="mono">[x]</span> = already done).</li><li>Options on task lines: <span class="mono">@surname</span> assignee · <span class="mono">#3</span> working days · <span class="mono">!high</span> priority · <span class="mono">start:2026-12-01</span> <span class="mono">due:2026-12-18</span>.</li></ul></section>'}
 function personStats(uid0,pid){var mine=function(t){return (uid0===''?!t.assignee:t.assignee===uid0)&&(!pid||t.projectId===pid)};
   var ts=leafTasks().filter(mine),all=S.tasks.filter(mine),a=0,ad=0,hb=0;
   all.forEach(function(t){acts(t).forEach(function(c){a++;if(c.done)ad++})});
@@ -988,35 +998,35 @@ function personStats(uid0,pid){var mine=function(t){return (uid0===''?!t.assigne
   return {ts:ts,tasks:ts.length,done:ts.filter(function(t){return t.status==='Done'}).length,over:ts.filter(isOver).length,acts:a,actsDone:ad,est:ts.reduce(function(x,t){return x+t.est},0),hoursBy:hb}}
 function progRows(pid){var rows=S.users.map(function(u){return {u:u,s:personStats(u.id,pid)}});var un=personStats('',pid);rows.push({u:{id:'',name:'Unassigned',role:''},s:un});return rows.filter(function(r){return r.s.tasks||r.s.acts})}
 function wProg(){var rows=progRows('');return '<section class="card"><h2>Progress by person</h2>'+(rows.length?'<div class="lst">'+rows.map(function(r){var s0=r.s;return '<div><span style="min-width:90px">'+esc(r.u.name)+'</span><span class="grow" style="flex:1">'+pbar(s0.done,s0.tasks)+'</span><span class="mono small">'+s0.done+'/'+s0.tasks+(s0.acts?' · ☑ '+s0.actsDone+'/'+s0.acts:'')+'</span></div>'}).join('')+'</div><p style="margin:8px 0 0"><button class="btn sm" data-act="nav" data-v="progress">Open team progress</button></p>':'<p class="muted">No assigned tasks yet.</p>')+'</section>'}
-function taskLine(t,withActs){var par=t.parent&&T(t.parent),p=P(t.projectId);
-  return '<div class="pl"><div class="row" style="gap:8px;align-items:center"><input type="checkbox" data-ch="taskchk" data-id="'+t.id+'"'+(t.status==='Done'?' checked':'')+(canEdit(t)?'':' disabled')+' aria-label="Done"><button class="btn sm" data-act="open" data-id="'+t.id+'" style="text-align:left"><span'+(t.status==='Done'?' class="dn"':'')+'>'+(par?'<span class="muted">'+esc(par.title)+' › </span>':'')+esc(t.title)+'</span></button>'+chips(t)+flags(t)+'<span class="grow"></span><span class="small muted">'+pdot(p)+esc(p?p.name:'')+'</span><span class="mono small">'+fd(t.due)+'</span></div>'+
-   (withActs&&acts(t).length?'<div class="pa">'+acts(t).map(function(c){return '<label class="small"><input type="checkbox" data-ch="acttick" data-id="'+t.id+'" data-cid="'+esc(c.id)+'"'+(c.done?' checked':'')+(canEdit(t)?'':' disabled')+'> <span'+(c.done?' class="dn"':'')+'>'+esc(c.t)+'</span></label>'}).join('')+'</div>':'')+'</div>'}
+function taskLine(t,withActs,inProj){var par=t.parent&&T(t.parent),p=P(t.projectId);
+  return '<div class="pl"><div class="row" style="gap:8px;align-items:center"><input type="checkbox" data-ch="taskchk" data-id="'+t.id+'"'+(t.status==='Done'?' checked':'')+(canEdit(t)?'':' disabled')+' aria-label="Done"><button class="btn sm" data-act="open" data-id="'+t.id+'" style="text-align:left"><span'+(t.status==='Done'?' class="dn"':'')+'>'+(par?'<span class="muted">'+esc(par.title)+' › </span>':'')+esc(t.title)+'</span></button>'+chips(t)+flags(t)+'<span class="grow"></span>'+(inProj?'<span class="small muted">'+esc(uname(t.assignee))+'</span>':'<span class="small muted">'+pdot(p)+esc(p?p.name:'')+'</span>')+'<span class="mono small">'+fd(t.due)+'</span></div>'+
+   (withActs&&acts(t).length?'<div class="pa">'+acts(t).map(function(c){return '<label class="small"><input type="checkbox" data-ch="acttick" data-id="'+t.id+'" data-cid="'+esc(c.id)+'"'+(c.done?' checked':'')+(canEdit(t)?'':' disabled')+'> <span'+(c.done?' class="dn"':'')+'>'+esc(c.t)+'</span></label>'}).join('')+'</div>':'')+
+   (inProj&&withActs&&canEdit(t)?'<div class="pa"><input data-enter="actadd" data-id="'+t.id+'" placeholder="Add an activity and press Enter" aria-label="Add an activity" class="small" style="width:100%"></div>':'')+'</div>'}
 function vProgress(){var u=S.ui,pid=u.ppj&&P(u.ppj)?u.ppj:'',rows=progRows(pid);
   var head='<div class="tools"><select data-ch="ppj" aria-label="Project">'+opt([['','All projects']].concat(pOpts()),pid)+'</select><label class="small"><input type="checkbox" data-ch="pdone"'+(u.pdone?' checked':'')+'> show completed tasks</label><label class="small"><input type="checkbox" data-ch="pacts"'+(u.pacts!==0?' checked':'')+'> show activities</label></div>';
   if(!rows.length)return head+'<section class="card"><p class="muted">No assigned tasks'+(pid?' in this project':'')+' yet. Add tasks and subtasks with <b>Quick add</b> on the Tasks page.</p></section>';
   var tot=rows.reduce(function(a,r){return {t:a.t+r.s.tasks,d:a.d+r.s.done,a:a.a+r.s.acts,ad:a.ad+r.s.actsDone}},{t:0,d:0,a:0,ad:0});
   var cell=function(d,n,none){return n?'<div class="mono">'+d+' / '+n+'</div>'+pbar(d,n):none};
-  var sum='<section class="card"><h2>Progress by person'+(pid?' — '+esc(P(pid).name):'')+'</h2><div class="tbw"><table class="tbl" style="min-width:560px"><thead><tr><th>Person</th><th>Tasks done</th><th>Activities done</th><th>Open</th><th>Overdue</th><th>Logged h</th><th>Est. h</th></tr></thead><tbody>'+
-   rows.map(function(r){var s0=r.s;return '<tr><td><b>'+esc(r.u.name)+'</b><br><span class="muted small">'+esc(r.u.role)+'</span></td><td style="min-width:110px">'+cell(s0.done,s0.tasks,'—')+'</td><td style="min-width:110px">'+cell(s0.actsDone,s0.acts,'—')+'</td><td class="mono">'+(s0.tasks-s0.done)+'</td><td class="mono">'+(s0.over?'<span class="flag bad">'+s0.over+'</span>':'0')+'</td><td class="mono" title="Hours logged by this person">'+nf(s0.hoursBy)+'</td><td class="mono" title="Estimated hours of the tasks assigned to this person">'+nf(s0.est)+'</td></tr>'}).join('')+
-   '<tr><td><b>Total</b></td><td>'+cell(tot.d,tot.t,'—')+'</td><td>'+cell(tot.ad,tot.a,'—')+'</td><td colspan="4"></td></tr></tbody></table></div>'
-   +'<p class="small muted" style="margin:8px 0 0">Tasks are counted at the lowest level: a task with subtasks is represented by its subtasks. Activities are the checklist items of the person’s tasks.</p></section>';
+  var sum='<section class="card"><h2>Progress by person'+(pid?' — '+esc(P(pid).name):'')+'</h2><div class="tbw"><table class="tbl" style="min-width:460px"><thead><tr><th>Person</th><th>Tasks done</th><th>Activities done</th><th>Open</th><th>Overdue</th></tr></thead><tbody>'+
+   rows.map(function(r){var s0=r.s;return '<tr><td><b>'+esc(r.u.name)+'</b><br><span class="muted small">'+esc(r.u.role)+'</span></td><td style="min-width:110px">'+cell(s0.done,s0.tasks,'—')+'</td><td style="min-width:110px">'+cell(s0.actsDone,s0.acts,'—')+'</td><td class="mono">'+(s0.tasks-s0.done)+'</td><td class="mono">'+(s0.over?'<span class="flag bad">'+s0.over+'</span>':'0')+'</td></tr>'}).join('')+
+   '<tr><td><b>Total</b></td><td>'+cell(tot.d,tot.t,'—')+'</td><td>'+cell(tot.ad,tot.a,'—')+'</td><td colspan="2"></td></tr></tbody></table></div>'
+   +'<p class="small muted" style="margin:8px 0 0">Tasks done = tasks assigned to the person. Activities = the checklist items of those tasks.</p></section>';
   var cards=rows.map(function(r){var open=r.s.ts.filter(function(t){return t.status!=='Done'}).sort(function(a,b){return a.due<b.due?-1:1}),dn=r.s.ts.filter(function(t){return t.status==='Done'});
     var list=open.concat(u.pdone?dn:[]);
     return '<section class="card"><h2>'+esc(r.u.name)+' <span class="small muted">'+r.s.done+' of '+r.s.tasks+' tasks'+(r.s.acts?' · '+r.s.actsDone+' of '+r.s.acts+' activities':'')+'</span></h2>'+pbar(r.s.done,r.s.tasks)+
      '<div class="lst" style="display:block;margin-top:8px">'+(list.length?list.map(function(t){return taskLine(t,u.pacts!==0)}).join(''):'<p class="muted small">Nothing open.</p>')+'</div></section>'}).join('');
   return head+sum+'<div class="wgrid">'+cards+'</div>'}
-function actSec(t,ro){var a=acts(t);
+function prevActs(t){var have={},m={};acts(t).forEach(function(c){have[c.t.toLowerCase()]=1});S.tasks.forEach(function(x){acts(x).forEach(function(c){var k=c.t.toLowerCase();if(have[k])return;(m[k]=m[k]||{t:c.t,n:0}).n++})});
+  return Object.keys(m).map(function(k){return m[k]}).sort(function(a,b){return b.n-a.n||(a.t<b.t?-1:1)}).slice(0,300)}
+function actSec(t,ro){var a=acts(t),pv=ro?[]:prevActs(t);
   return '<div class="sec"><h3>Activities ('+actDone(t)+'/'+a.length+')</h3>'+(a.length?pbar(actDone(t),a.length)+'<div class="lst small">'+a.map(function(c){return '<div><input type="checkbox" data-ch="acttick" data-id="'+t.id+'" data-cid="'+esc(c.id)+'"'+(c.done?' checked':'')+(ro?' disabled':'')+' aria-label="Done"><input class="grow'+(c.done?' dn':'')+'" style="flex:1;border:0;background:transparent" data-ch="acttxt" data-id="'+t.id+'" data-cid="'+esc(c.id)+'" value="'+esc(c.t)+'"'+(ro?' disabled':'')+'>'+(c.done&&c.by?'<span class="muted small">'+esc(uname(c.by))+'</span>':'')+(ro?'':'<button class="btn sm dng" data-act="actdel" data-id="'+t.id+'" data-cid="'+esc(c.id)+'" aria-label="Remove activity">✕</button>')+'</div>'}).join('')+'</div>':'<p class="small muted" style="margin:0 0 6px">No activities yet.</p>')+
-   (ro?'':'<input data-enter="actadd" data-id="'+t.id+'" placeholder="Add an activity and press Enter (paste several lines to add many)" style="width:100%;margin-top:6px">')+'</div>'}
-function subSec(t,ro){if(t.parent)return '';var k=kidsOf(t),dn=k.filter(function(x){return x.status==='Done'}).length;
-  return '<div class="sec"><h3>Subtasks ('+dn+'/'+k.length+')</h3>'+(k.length?pbar(dn,k.length)+'<div class="lst small">'+k.map(function(x){return '<div><span data-stop><input type="checkbox" data-ch="taskchk" data-id="'+x.id+'"'+(x.status==='Done'?' checked':'')+(canEdit(x)?'':' disabled')+' aria-label="Done"></span><button class="btn sm" data-act="open" data-id="'+x.id+'" style="text-align:left"><span'+(x.status==='Done'?' class="dn"':'')+'>'+esc(x.title)+'</span></button>'+chips(x)+'<span class="grow"></span><span class="muted">'+esc(uname(x.assignee))+' · '+fd(x.due)+'</span></div>'}).join('')+'</div>':'<p class="small muted" style="margin:0 0 6px">No subtasks.</p>')+
-   (ro?'':'<input data-enter="subadd" data-id="'+t.id+'" placeholder="Add a subtask and press Enter — e.g. Weigh samples @Rossi #1 ~2h" style="width:100%;margin-top:6px">')+'</div>'}
+   (ro?'':'<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><input data-enter="actadd" data-id="'+t.id+'" placeholder="New activity — press Enter (paste several lines to add many)" aria-label="New activity" style="flex:2;min-width:200px">'+(pv.length?'<select data-ch="actpick" data-id="'+t.id+'" aria-label="Add a previous activity" style="flex:1;min-width:160px">'+opt([['','Add a previous activity…']].concat(pv.map(function(x){return [x.t,x.t+(x.n>1?' ('+x.n+'×)':'')]})),'')+'</select>':'')+'</div>')+'</div>'}
 function setDone(t,on){if(!canEdit(t)){toast('Your role cannot edit this task.');return false}
   if(on){if(!applyStatus(t,'Done'))return false}else{t.status=logged(t)>0?'In progress':'To do';log('"'+t.title+'" reopened')}
   if(on)kidsOf(t).forEach(function(k){k.status='Done'});if(t.parent){var par=T(t.parent);if(par)localRollup(par)}return true}
 function addActs(t,lines){var n=0;lines.forEach(function(l){var m=/^\s*(?:[-*•]|\[( |x|X)\])\s+(.*)$/.exec(l),dn=false,tx=l.trim();if(m){tx=(m[2]||'').trim();dn=m[1]==='x'||m[1]==='X';var mm=/^\[( |x|X)\]\s+(.*)$/.exec(tx);if(mm){tx=mm[2];dn=dn||mm[1]!==' '}}if(!tx||acts(t).length>=200)return;
     t.checklist.push({id:uid('c'),t:tx.slice(0,300),done:dn,by:dn?S.me:null,at:dn?Date.now():null});n++});
-  if(n){log(n+' activit'+(n>1?'ies':'y')+' added to "'+t.title+'"');commit();setTimeout(function(){var i=document.querySelector('[data-enter="actadd"]');if(i)i.focus()},0)}}
+  if(n){log(n+' activit'+(n>1?'ies':'y')+' added to "'+t.title+'"');commit();setTimeout(function(){var i=document.querySelector('[data-enter="actadd"][data-id="'+t.id+'"]');if(i)i.focus()},0)}}
 /* ---------- templates ---------- */
 var TP=function(id){return S.templates.find(function(t){return t.id===id})};
 /* create the steps of a template: mode 'none' (independent), 'after' (first steps wait for anchor), 'before' (anchor waits for the last steps) */
@@ -1044,9 +1054,9 @@ function tplCard(t,pm){var sel=S.ui.tpl===t.id;
     else btns='<div class="row" style="flex-wrap:wrap"><button class="btn" data-act="tplsel" data-id="'+esc(t.id)+'">Use template</button><button class="btn" data-act="tpledit" data-id="'+esc(t.id)+'">Edit</button><button class="btn" data-act="tpldup" data-id="'+esc(t.id)+'">Duplicate</button><button class="btn dng" data-act="'+(S.ui.tpldel===t.id?'tpldel2':'tpldel')+'" data-id="'+esc(t.id)+'">'+(S.ui.tpldel===t.id?'Confirm delete':'Delete')+'</button></div>'}
   return '<section class="card"><h2>'+esc(t.name)+'</h2><p class="muted">'+esc(t.desc)+'</p><ol class="small">'+t.tasks.map(function(x){return '<li>'+esc(x.t)+' <span class="mono muted">'+x.d+' d'+(x.after?' · after '+x.after.map(function(k){return k+1}).join(','):'')+'</span></li>'}).join('')+'</ol>'+btns+'</section>'}
 function vTpl(){var pm=isPM();
-  return (pm?'<div class="tools" style="margin-bottom:10px"><button class="btn pri" data-act="tplnew">New template</button><span class="small muted">Templates apply to a new or existing project (here) and to a single task (task panel → Add template steps).</span></div>':'')+
+  return (pm?'<div class="tools" style="margin-bottom:10px"><button class="btn pri" data-act="tplnew">New template</button><span class="small muted">Templates create the tasks of a new or existing project.</span></div>':'')+
   '<div class="wgrid">'+(S.templates.length?S.templates.map(function(t){return tplCard(t,pm)}).join(''):'<p class="muted">No templates. '+(pm?'Create one with “New template”.':'')+'</p>')+'</div>'+
-  (isPM()?'<section class="card"><h2>Many tasks at once</h2><p class="muted" style="margin:0 0 8px">Type or paste projects, tasks, subtasks and activities as an outline.</p><button class="btn pri" data-act="qaopen">Open Quick add</button></section>':'')}
+''}
 /* ---------- settings ---------- */
 function vSet(){var ad=isAdmin(),json='';
   var users=S.users.map(function(u){return '<tr><td><input data-ch="uname" data-id="'+u.id+'" value="'+esc(u.name)+'"'+(ad?'':' disabled')+'></td><td><select data-ch="urole" data-id="'+u.id+'"'+(ad?'':' disabled')+'>'+opt(ROLES,u.role)+'</select></td><td><input type="number" min="0" max="80" style="width:70px" data-ch="ucap" data-id="'+u.id+'" value="'+u.cap+'"'+(ad?'':' disabled')+'></td><td>'+(ad&&u.id!==S.me?(MODE==='folder'?'':'<button class="btn sm" data-act="userpw" data-id="'+u.id+'">Reset password</button> ')+'<button class="btn sm dng" data-act="userdel" data-id="'+u.id+'">Remove</button>':'')+'</td></tr>'}).join('');
@@ -1054,7 +1064,7 @@ function vSet(){var ad=isAdmin(),json='';
   var ints=[['Slack','https://slack.com'],['Google Calendar','https://calendar.google.com'],['Microsoft 365','https://www.microsoft.com/microsoft-365'],['Jira','https://www.atlassian.com/software/jira'],['GitHub','https://github.com'],['Benchling (ELN)','https://www.benchling.com'],['SciNote (ELN)','https://www.scinote.net']];
   return '<section class="card"><h2>Users and roles</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Role</th><th>Capacity h/wk</th><th></th></tr></thead><tbody>'+users+'</tbody></table></div>'+
    (ad?'<div class="tools" style="margin-top:10px"><input id="nu-n" placeholder="Name">'+(MODE==='folder'?'':'<input id="nu-u" placeholder="Username" autocomplete="off"><input id="nu-p" type="password" placeholder="Password (10+)" autocomplete="new-password">')+'<select id="nu-r">'+opt(ROLES,'Researcher')+'</select><button class="btn pri" data-act="useradd">'+(MODE==='folder'?'Add person':'Create account')+'</button></div>':'')+
-   '<ul class="small muted"><li>Admin: everything, including people and roles.</li><li>Project manager: projects, tasks, rules, templates, assignments.</li><li>Researcher: edits and logs hours on own tasks.</li><li>Viewer: read-only.</li></ul><p class="small muted">'+(MODE==='folder'?'In shared-folder mode roles organise the interface but are not access control.':'Roles are enforced by the server on every request.')+'</p></section>'+
+   '<ul class="small muted"><li>Admin: everything, including people and roles.</li><li>Project manager: projects, tasks, rules, templates, assignments.</li><li>Researcher: edits own tasks and ticks, adds and removes their activities.</li><li>Viewer: read-only.</li></ul><p class="small muted">'+(MODE==='folder'?'In shared-folder mode roles organise the interface but are not access control.':'Roles are enforced by the server on every request.')+'</p></section>'+
    '<section class="card"><h2>Custom fields</h2><div class="tbw"><table class="tbl" style="min-width:520px"><thead><tr><th>Name</th><th>Type</th><th>Options / formula</th><th></th></tr></thead><tbody>'+fields+'</tbody></table></div>'+
    (isPM()?'<div class="form" style="margin-top:10px"><label>Name<input id="nf-n"></label><label>Type<select id="nf-t">'+opt(['text','number','select','date','checkbox','formula'],'text')+'</select></label><label class="full">Options (comma-separated) or formula, e.g. <span class="mono">{est}/{No. of samples}</span>. Variables: est, logged, numeric fields.<input id="nf-x"></label><label class="full"><button class="btn pri" data-act="fieldadd" style="width:max-content">Add field</button></label></div>':'')+'</section>'+
    '<section class="card"><h2>Integrations and backup</h2><p class="muted">No external integration is active. Calendar export (ICS) and JSON copy are available. Useful links:</p><p>'+ints.map(function(i){return '<a href="'+i[1]+'" target="_blank" rel="noopener">'+esc(i[0])+'</a>'}).join(' · ')+'</p>'+
@@ -1063,7 +1073,7 @@ function vSet(){var ad=isAdmin(),json='';
 
 /* ---------- info and license ---------- */
 function vInfo(){
-  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>2.0.0-beta.4</dd><dt>License</dt><dd>Apache License 2.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
+  return '<section class="card"><h2>Information</h2><dl class="ib"><dt>Author</dt><dd>Flavio Pendolino</dd><dt>Version</dt><dd>2.0.0-beta.5</dd><dt>License</dt><dd>Apache License 2.0</dd><dt>Commercial use</dt><dd>penfla@me.com</dd>'+
    '<dt>Purpose</dt><dd>Project, task, resource and request management in a chemical/polymer laboratory, with the typical features of Asana and monday.com.</dd>'+
    '<dt>Method</dt><dd>Vanilla JavaScript client for the LabPM server (SQLite, SSE live updates); finish-to-start date cascade on working days; workload = remaining hours spread over working days; data shared through the server; full export/import as JSON.</dd>'+
    '<dt>Disclaimer</dt><dd>validate the results against your own reference samples before any analytical, engineering, safety or regulatory use.</dd>'+
@@ -1074,6 +1084,9 @@ function vInfo(){
    '<section class="card"><details class="lic"><summary>License text</summary><pre>Copyright 2026 Flavio Pendolino\n\nLicensed under the Apache License, Version 2.0 (the "License"); you may not use this software except in compliance with the License. You may obtain a copy of the License at\n\n    https://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.\n\nThe full text is in the LICENSE file of the repository.</pre></details></section>'}
 
 /* ---------- session ---------- */
+function vSettingsPage(){var tab=S.ui.stab||'general',tabs=[['general','Settings'],['data','Data & sync'],['templates','Templates'],['info','Info & license']];
+  var inner=tab==='data'?vSession():tab==='templates'?vTpl():tab==='info'?vInfo():vSet();
+  return '<div class="tools"><div class="seg" role="group" aria-label="Settings sections">'+tabs.map(function(t){return '<button data-act="settab" data-v="'+t[0]+'" aria-pressed="'+(tab===t[0])+'">'+esc(t[1])+'</button>'}).join('')+'</div></div>'+inner}
 function syncInfo(){if(MODE==='folder'&&FB.ro)return 'Read-only view of folder <b>'+esc(FB.h.name)+'</b> (this browser cannot write to a shared folder). You see the state at the time you opened it. <label class="btn sm">Reload folder<input type="file" webkitdirectory multiple hidden data-ch="fro"></label> To edit, use Chrome or Edge, or the LabPM server address.';if(MODE!=='folder')return 'All changes are written to the central server and appear in other open sessions within seconds. Roles are enforced by the server.';
   return 'Shared-folder mode (no server): folder <b>'+esc(FB.h.name)+'</b>. Every PC writes only its own log file in <span class="mono">log/</span> and reads the others every few seconds. <b>Roles are not access control in this mode</b>: anyone with the folder can read and change everything. <button class="btn sm" data-act="fchange">Change folder</button>'}
 function acctCard(){if(MODE==='folder')return '<section class="card"><h2>Identity</h2><p style="margin:0 0 8px">You are <b>'+esc(me().name)+'</b> ('+esc(me().role)+'). There are no passwords in shared-folder mode.</p><button class="btn" data-act="logout">Switch user</button></section>';
@@ -1092,8 +1105,6 @@ function renderDrawer(){
   var el=$('#drawer'),t=S.ui.drawer&&T(S.ui.drawer);
   if(!t){el.innerHTML='';return}
   var old=$('#drpanel'),sc=old?old.scrollTop:0,ro=!canEdit(t),dis=ro?' disabled':'',p=P(t.projectId);
-  var cands=S.tasks.filter(function(x){return x.id!==t.id&&!dependsOn(x.id,t.id)&&x.id!==t.parent&&x.parent!==t.id});
-  var succ=S.tasks.filter(function(x){return x.deps.indexOf(t.id)>=0});
   var docs=S.docs.filter(function(d){return d.taskId===t.id});
   var cf=S.fields.map(function(f){var v=t.cf[f.id],n='cf:'+f.id,lab='<label>'+esc(f.name);
     if(f.type==='formula')return lab+'<input value="'+esc(cfv(t,f))+'" disabled></label>';
@@ -1110,17 +1121,9 @@ function renderDrawer(){
    '<label>Priority<select data-ch="dr" data-f="priority"'+dis+'>'+opt(PRIOS,t.priority)+'</select></label>'+
    '<label>Start<input type="date" data-ch="dr" data-f="start" value="'+t.start+'"'+dis+'></label>'+
    '<label>Due<input type="date" data-ch="dr" data-f="due" value="'+t.due+'"'+dis+'></label>'+
-   '<label>Estimated hours<input type="number" min="0" step="0.5" data-ch="dr" data-f="est" value="'+t.est+'"'+dis+'></label>'+
    '<label>Tags (comma-separated)<input data-ch="dr" data-f="tags" value="'+esc(t.tags.join(', '))+'"'+dis+'></label></div>'+
    (cf?'<div class="sec"><h3>Custom fields</h3><div class="form">'+cf+'</div></div>':'')+
-   actSec(t,ro)+subSec(t,ro)+
-   '<div class="sec"><h3>Dependencies (finish-to-start)</h3><div class="chk">'+(cands.map(function(x){return '<label><input type="checkbox" data-ch="dr" data-f="dep:'+x.id+'"'+(t.deps.indexOf(x.id)>=0?' checked':'')+dis+'><span>'+esc(x.title)+' <span class="muted small">'+esc((P(x.projectId)||{}).name||'')+'</span></span></label>'}).join('')||'<span class="muted">No other tasks.</span>')+'</div>'+
-   (isBlocked(t)?'<div class="small"><span class="flag warn">blocked by</span> '+blockers(t).map(function(b){return esc(b.title)}).join('; ')+'</div>':'')+
-   (succ.length?'<div class="small muted">Unblocks: '+succ.map(function(x){return esc(x.title)}).join('; ')+'. If you move the due date, these tasks shift in cascade.</div>':'')+'</div>'+
-   '<div class="sec"><h3>Time</h3><div class="row"><span class="mono">'+nf(logged(t),2)+' h logged / '+nf(t.est)+' h estimated</span>'+(ro?'':(running?'<button class="btn dng sm" data-act="timerstop" data-id="'+t.id+'">Stop timer ('+esc(uname(running.user))+')</button>':'<button class="btn sm" data-act="timerstart" data-id="'+t.id+'">Start timer</button>'))+'</div>'+
-   (ro?'':'<div class="row"><input type="number" id="lg-h" min="0" step="0.25" placeholder="hours" style="width:80px"><input id="lg-n" placeholder="note" class="grow"><button class="btn sm" data-act="addlog" data-id="'+t.id+'">Add</button></div>')+
-   '<div class="lst small">'+t.log.slice(-8).reverse().map(function(l){return '<div><span><span class="mono">'+fd(l.date)+'</span> · '+esc(uname(l.u))+' · <b class="mono">'+nf(l.h,2)+' h</b> '+esc(l.note||'')+'</span>'+(ro?'':'<button class="btn sm" data-act="dellog" data-id="'+t.id+'" data-lid="'+l.id+'">×</button>')+'</div>'}).join('')+'</div></div>'+
-   (isPM()&&S.templates.length?'<div class="sec"><h3>Add template steps</h3><div class="form"><label>Template<select id="dt-t">'+opt(S.templates.map(function(x){return [x.id,x.name]}),S.templates[0].id)+'</select></label><label>Placement<select id="dt-m">'+opt([['after','After this task'],['before','Before this task'],['none','Independent (no link)']],'after')+'</select></label><label class="full"><button class="btn" data-act="tpltask" data-id="'+t.id+'" style="width:max-content">Add steps</button></label></div><p class="small muted" style="margin:6px 0 0">Creates the template steps in this task’s project. After: the first steps start when this task ends. Before: this task waits for the last steps and moves later if needed.</p></div>':'')+
+   actSec(t,ro)+
    attSec(t,ro)+
    '<div class="sec"><h3>Notes</h3><textarea rows="3" data-ch="dr" data-f="notes"'+dis+'>'+esc(t.notes)+'</textarea></div>'+
    '<div class="sec"><h3>Documents</h3>'+(docs.map(function(d){return '<div><a href="#" data-act="docsel" data-id="'+d.id+'" data-go="1">'+esc(d.title)+'</a></div>'}).join('')||'<span class="muted small">No linked documents.</span>')+(isPM()||role()==='Researcher'?'<button class="btn sm" data-act="docnew" data-task="'+t.id+'" style="width:max-content">New document for this task</button>':'')+'</div>'+
@@ -1183,23 +1186,26 @@ function exportTasks(){var ts=filtered().slice().sort(function(a,b){var pa=S.pro
   saveBlob(buildXlsx(ts,info),fn,'Excel workbook','.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').then(function(ok){if(ok){log('Exported '+ts.length+' tasks to Excel');save();toast('Exported '+ts.length+' tasks to '+fn)}})}
 
 /* ---------- attachments (stored on the server, <data folder>/attachments) ---------- */
-var MAXUP=25*1048576;
+var MAXUP=25*1048576,PEND={};
+/* staged files: each gets a display name (empty = the file name) before upload */
+function stageUI(key){var p=PEND[key];if(!p||!p.files.length)return '';
+  return '<div class="stg" style="margin-top:8px"><div class="small muted">Name for each file (leave empty to use the file name):</div>'+p.files.map(function(f,i){return '<div class="row" style="gap:8px;margin:4px 0"><input data-stg="'+esc(key)+'" data-i="'+i+'" value="'+esc(p.names[i]||'')+'" placeholder="'+esc(f.name)+'" aria-label="Name for '+esc(f.name)+'" style="flex:1;min-width:140px"><span class="muted small mono">'+esc(f.name)+' · '+fsz(f.size)+'</span></div>'}).join('')+'<div class="row"><button class="btn pri sm" data-act="fstageup" data-key="'+esc(key)+'">Upload</button><button class="btn sm" data-act="fstagex" data-key="'+esc(key)+'">Cancel</button></div></div>'}
 var fsz=function(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?Math.round(n/1024)+' KB':n+' B'};
 var canAttach=function(taskId){var t=taskId&&T(taskId);return isPM()||(role()==='Researcher'&&!!t&&t.assignee===S.me)};
-function uploadFiles(list,taskId,projectId){if(MODE==='folder'){folderUpload(Array.prototype.slice.call(list||[]),taskId,projectId);return}var fl=Array.prototype.slice.call(list||[]);if(!fl.length)return;
+function uploadFiles(list,taskId,projectId,titles){if(MODE==='folder'){folderUpload(Array.prototype.slice.call(list||[]),taskId,projectId,titles||[]);return}var fl=Array.prototype.slice.call(list||[]);if(!fl.length)return;
   var big=fl.filter(function(f){return f.size>MAXUP});if(big.length){toast('"'+big[0].name+'" exceeds 25 MB.');fl=fl.filter(function(f){return f.size<=MAXUP})}
-  var n=0;fl.reduce(function(p,f){return p.then(function(){var q='name='+encodeURIComponent(f.name)+(taskId?'&taskId='+encodeURIComponent(taskId):'')+(projectId?'&projectId='+encodeURIComponent(projectId):'');
+  var n=0;fl.reduce(function(p,f){return p.then(function(){var ti=((titles||[])[list.indexOf?list.indexOf(f):0]||'').trim(),q='name='+encodeURIComponent(f.name)+(ti?'&title='+encodeURIComponent(ti):'')+(taskId?'&taskId='+encodeURIComponent(taskId):'')+(projectId?'&projectId='+encodeURIComponent(projectId):'');
     return fetch('/api/files?'+q,{method:'POST',headers:{'X-Client-Id':CID,'Content-Type':f.type||'application/octet-stream'},body:f,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){if(r.status===201){S.files.push(j.item);n++}else toast((j.error||'Upload failed')+': '+f.name)})})})},Promise.resolve())
   .then(function(){if(n){log(n+' file(s) attached');toast(n+' file(s) uploaded.');renderBody();renderDrawer()}})}
 function fileRows(list,ro,ctx){return list.map(function(f){var t=f.taskId&&T(f.taskId),p=P(f.projectId);
-  return '<div><span class="grow" style="flex:1;min-width:0"><a '+(MODE==='folder'?'href="#" data-act="fdl" data-id="'+esc(f.id)+'"':'href="/api/files/'+esc(f.id)+'/download" download')+'><b>'+esc(f.name)+'</b></a> <span class="muted small mono">'+fsz(f.size)+' · '+fd(new Date(f.added).toISOString().slice(0,10))+' · '+esc(uname(f.by))+'</span>'+(ctx?'<br><span class="small muted">'+esc(p?p.name:'—')+(t?' · '+esc(t.title):'')+'</span>':'')+'</span>'+
+  return '<div><span class="grow" style="flex:1;min-width:0"><a '+(MODE==='folder'?'href="#" data-act="fdl" data-id="'+esc(f.id)+'"':'href="/api/files/'+esc(f.id)+'/download" download')+'><b>'+esc(f.title||f.name)+'</b></a>'+(f.title&&f.title!==f.name?' <span class="muted small">('+esc(f.name)+')</span>':'')+' <span class="muted small mono">'+fsz(f.size)+' · '+fd(new Date(f.added).toISOString().slice(0,10))+' · '+esc(uname(f.by))+'</span>'+(ctx?'<br><span class="small muted">'+esc(p?p.name:'—')+(t?' · '+esc(t.title):'')+'</span>':'')+'</span>'+
    (!ro&&(isPM()||f.by===S.me)?'<button class="btn sm dng" data-act="frm" data-id="'+esc(f.id)+'">Delete</button>':'')+'</div>'}).join('')}
 function attSec(t,ro){var fl=S.files.filter(function(f){return f.taskId===t.id}),can=!ro&&canAttach(t.id);
   return '<div class="sec"><h3>Attachments ('+fl.length+')</h3>'+(fl.length?'<div class="lst small">'+fileRows(fl,ro,false)+'</div>':'<p class="small muted" style="margin:0 0 6px">No files.</p>')+
-   (can?'<label class="small muted" style="display:flex;flex-direction:column;gap:3px">Add files (max 25 MB each)<input type="file" multiple data-ch="fup" data-task="'+esc(t.id)+'"></label>':'')+'</div>'}
+   (can?'<label class="small muted" style="display:flex;flex-direction:column;gap:3px">Add files (max 25 MB each)<input type="file" multiple data-ch="fstage" data-key="t:'+esc(t.id)+'" data-task="'+esc(t.id)+'"></label>'+stageUI('t:'+t.id):'')+'</div>'}
 function vFiles(){var u=S.ui,pid=u.fpj&&P(u.fpj)?u.fpj:'',list=S.files.filter(function(f){return !pid||f.projectId===pid}).sort(function(a,b){return b.added-a.added});
   var tk=u.ftk&&T(u.ftk)&&(!pid||T(u.ftk).projectId===pid)?u.ftk:'',tasks=S.tasks.filter(function(t){return !pid||t.projectId===pid}).filter(function(t){return canAttach(t.id)||isPM()});
-  var up=isPM()||role()==='Researcher'?'<div class="form"><label>Project<select data-ch="fpj">'+opt([['','All projects']].concat(S.projects.map(function(p){return [p.id,p.name]})),pid)+'</select></label><label>Attach to task<select data-ch="ftk">'+opt([['','Project level (no task)']].concat(tasks.map(function(t){return [t.id,t.title]})),tk)+'</select></label><label class="full">Files (max 25 MB each)<input type="file" multiple data-ch="fupg"></label></div>':'<p class="muted" style="margin:0">Your role cannot add files.</p>';
+  var up=isPM()||role()==='Researcher'?'<div class="form"><label>Project<select data-ch="fpj">'+opt([['','All projects']].concat(S.projects.map(function(p){return [p.id,p.name]})),pid)+'</select></label><label>Attach to task<select data-ch="ftk">'+opt([['','Project level (no task)']].concat(tasks.map(function(t){return [t.id,t.title]})),tk)+'</select></label><label class="full">Files (max 25 MB each)<input type="file" multiple data-ch="fstage" data-key="g"></label></div>'+stageUI('g'):'<p class="muted" style="margin:0">Your role cannot add files.</p>';
   return '<section class="card"><h2>Attach files</h2>'+up+'</section><section class="card"><h2>Files ('+list.length+')</h2>'+(list.length?'<div class="lst small">'+fileRows(list,false,true)+'</div>':'<p class="muted">No files.</p>')+'</section>'}
 /* ---------- empty database / clear ---------- */
 function emptySession(){var f=function(id,name,type,x){var o={id:id,name:name,type:type};if(type==='select')o.options=x;if(type==='formula')o.formula=x;return o};
@@ -1210,8 +1216,8 @@ function vEmpty(){var ad=isAdmin(),c=S.ui.confirmClear;
 /* ---------- actions ---------- */
 function defVal(type){return {status_to:'Done',set_status:'In progress',priority:'High',set_priority:'High',project:S.projects[0]?S.projects[0].id:'',set_assignee:''}[type]||''}
 var BK=null;
-function loadBackups(){if(MODE==='folder'){folderBackupList().then(function(l){BK=l;if(S.ui.view==='session')renderBody()});return}api('GET','/api/backups').then(function(r){BK=r.s===200?r.j.backups:[];if(S.ui.view==='session')renderBody()})}
-function go(view){if(view==='session'&&isAdmin())loadBackups();S.ui.view=view;S.ui.drawer=null;S.ui.confirmClear=false;save();render();renderDrawer();window.scrollTo(0,0)}
+function loadBackups(){if(MODE==='folder'){folderBackupList().then(function(l){BK=l;if(S.ui.view==='settings'&&S.ui.stab==='data')renderBody()});return}api('GET','/api/backups').then(function(r){BK=r.s===200?r.j.backups:[];if(S.ui.view==='settings'&&S.ui.stab==='data')renderBody()})}
+function go(view){if(view==='settings'&&S.ui.stab==='data'&&isAdmin())loadBackups();if(view==='projects')S.ui.pdet=null;S.ui.view=view;S.ui.drawer=null;S.ui.confirmClear=false;save();render();renderDrawer();window.scrollTo(0,0)}
 function download(txt,label){var done=function(){toast(label+' copied to clipboard')};
   var fb=function(){var a=$('#jb');if(a){a.value=txt;a.focus();a.select()}toast('Clipboard unavailable: text placed in the field, copy it from there')};
   try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}}
@@ -1244,10 +1250,11 @@ var A={
  docsel:function(e,ev){if(ev)ev.preventDefault();S.ui.doc=e.dataset.id;if(e.dataset.go){S.ui.view='docs';S.ui.drawer=null;save();render();renderDrawer()}else{save();renderBody()}},
  docnew:function(e){var d={id:uid('d'),title:'New document',projectId:'',taskId:e.dataset.task||'',updated:Date.now(),body:'# Title\n\n'};if(d.taskId){var t=T(d.taskId);d.projectId=t.projectId;d.title='Notes: '+t.title}S.docs.push(d);S.ui.doc=d.id;S.ui.view='docs';S.ui.drawer=null;log('Nuovo documento "'+d.title+'"');save();render();renderDrawer()},
  docdel:function(e){S.docs=S.docs.filter(function(d){return d.id!==e.dataset.id});S.ui.doc=null;save();renderBody()},
+ popen:function(e){S.ui.pdet=e.dataset.id;save();renderBody();window.scrollTo(0,0)},
+ pclose:function(){S.ui.pdet=null;save();renderBody()},
+ taskadd:function(inp){if(!isPM())return;var pid=inp.dataset.pid,q=parseQuick(inp.value.trim());if(!pid||!q.title)return;if(q.badUser)toast('No person matches “@'+q.badUser+'”.');mkTaskQuick(q,pid,null,TODAY());log('Task "'+q.title+'" added');inp.value='';commit();setTimeout(function(){var i=document.querySelector('[data-enter="taskadd"]');if(i)i.focus()},0)},
  projadd:function(){var n=$('#np-name').value.trim();if(!n){toast('Enter the project name.');return}S.projects.push({id:uid('p'),name:n,c:S.projects.length%6,status:'auto'});log('New project "'+n+'"');save();renderBody()},
  projdoc:function(e){var p=P(e.dataset.id),d=S.docs.find(function(x){return x.projectId===p.id&&!x.taskId});if(!d){d={id:uid('d'),title:'Project notes: '+p.name,projectId:p.id,taskId:'',updated:Date.now(),body:'# '+p.name+'\n\n'};S.docs.push(d)}S.ui.doc=d.id;go('docs')},
- goaladd:function(){var n=$('#ng-name').value.trim(),ps=Array.prototype.slice.call($('#ng-p').selectedOptions).map(function(o){return o.value});if(!n||!ps.length){toast('Enter a name and at least one project.');return}S.goals.push({id:uid('g'),name:n,target:$('#ng-date').value||addD(TODAY(),30),pids:ps});log('New goal "'+n+'"');save();renderBody()},
- goaldel:function(e){S.goals=S.goals.filter(function(g){return g.id!==e.dataset.id});save();renderBody()},
  reqsubmit:function(){if(role()==='Viewer'){toast('The Viewer role cannot submit requests.');return}var ti=$('#rq-t').value.trim();if(!ti){toast('Enter a title.');return}
   var p=S.projects.find(function(x){return x.name==='Internal requests'});if(!p){p={id:uid('p'),name:'Internal requests',c:5,status:'auto'};S.projects.push(p)}
   var fl=function(n){return S.fields.find(function(f){return f.name===n})},cf={};if(fl('Instrument'))cf[fl('Instrument').id]=$('#rq-tool').value;if(fl('No. of samples'))cf[fl('No. of samples').id]=parseFloat($('#rq-n').value)||1;if(fl('Lot'))cf[fl('Lot').id]=$('#rq-l').value.trim();
@@ -1260,37 +1267,33 @@ var A={
   S.rules.push({id:uid('r'),name:b.name.trim(),on:true,trigger:{type:b.tt,value:b.tt==='status_to'?b.tv:''},cond:{type:b.ct,value:b.ct==='none'?'':b.cv},action:{type:b.at,value:b.av}});
   S.ui.rb=defaultUI().rb;log('New rule "'+b.name+'"');save();renderBody()},
  ruledel:function(e){S.rules=S.rules.filter(function(r){return r.id!==e.dataset.id});save();renderBody()},
+ settab:function(e){S.ui.stab=e.dataset.v;S.ui.tpl=null;S.ui.tpldel=null;if(e.dataset.v==='data'&&isAdmin())loadBackups();save();renderBody()},
+ fstageup:function(e){var p=PEND[e.dataset.key];if(!p)return;delete PEND[e.dataset.key];uploadFiles(p.files,p.task,p.project,p.files.map(function(f,i){return (p.names[i]||'').trim()}))},
+ fstagex:function(e){delete PEND[e.dataset.key];renderBody();renderDrawer()},
  qa:function(){S.ui.qa=!S.ui.qa;save();renderBody()},
- qaopen:function(){S.ui.qa=true;S.ui.view='tasks';S.ui.tview='list';save();render()},
  qacreate:function(){if(!isPM()){toast('Your role cannot create projects and tasks.');return}
   var items=parseOutline($('#qa-t').value),pname=$('#qa-p').value.trim(),base=$('#qa-d').value||TODAY();
-  if(!items.some(function(i){return i.k==='task'||i.k==='sub'||i.k==='act'})){toast('Write at least one task line.');return}
-  var need=!pname,bad='';items.forEach(function(i){if(i.k==='project')need=false;else if(need&&!bad&&(i.k==='task'||i.k==='sub'||i.k==='act'))bad=i.q?i.q.title:i.t});
+  if(!items.some(function(i){return i.k==='task'})){toast('Write at least one task line.');return}
+  var need=!pname,bad=false;items.forEach(function(i){if(i.k==='project')need=false;else if(need&&(i.k==='task'||i.k==='act'))bad=true});
   if(bad){toast('Name the project first (field above or a “# Project” line).');return}
-  var cur=null,nP=0,nT=0,nS=0,nA=0,warn=0,lastP=null;
+  var cur=null,nP=0,nT=0,nA=0,warn=0,lastP=null;
   var ensure=function(name){var pr=S.projects.find(function(x){return x.name.toLowerCase()===name.toLowerCase()});if(!pr){pr={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(pr);nP++}return pr};
   if(pname)cur=ensure(pname);
   items.forEach(function(i){
     if(i.k==='project'){cur=ensure(i.name);return}
     if(i.k==='warn'){warn++;return}
     if(i.k==='task'){i.task=mkTaskQuick(i.q,cur.id,null,base);nT++}
-    else if(i.k==='sub'){i.task=mkTaskQuick(i.q,cur.id,i.parent.task,base);nS++}
     else if(i.k==='act'){var tt=i.of.task;if(tt.checklist.length<200){tt.checklist.push({id:uid('c'),t:i.t,done:i.done,by:i.done?S.me:null,at:i.done?Date.now():null});nA++}}
     if(cur)lastP=cur});
-  items.forEach(function(i){if(i.k==='task'&&hasKids(i.task))localRollup(i.task)});
-  log('Quick add: '+nP+' projects, '+nT+' tasks, '+nS+' subtasks, '+nA+' activities');
-  S.ui.qa=false;if(lastP)S.ui.fp=lastP.id;S.ui.tview='list';S.ui.view='tasks';save();render();
-  toast('Created '+(nP?nP+' project(s), ':'')+nT+' task(s), '+nS+' subtask(s), '+nA+' activit'+(nA===1?'y':'ies')+(warn?' ('+warn+' activity line(s) without a task skipped)':'')+'.')},
+  log('Quick add: '+nP+' projects, '+nT+' tasks, '+nA+' activities');
+  S.ui.qa=false;S.ui.view='projects';S.ui.pdet=lastP?lastP.id:null;if(lastP)S.ui.fp=lastP.id;save();render();
+  toast('Created '+(nP?nP+' project(s), ':'')+nT+' task(s), '+nA+' activit'+(nA===1?'y':'ies')+(warn?' ('+warn+' activity line(s) without a task skipped)':'')+'.')},
  actdel:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t))return;t.checklist=acts(t).filter(function(c){return c.id!==e.dataset.cid});commit()},
  actadd:function(inp){var t=T(inp.dataset.id);if(!t||!canEdit(t))return;var v=inp.value;inp.value='';addActs(t,[v])},
- subadd:function(inp){var t=T(inp.dataset.id);if(!t||t.parent||!canEdit(t))return;var q=parseQuick(inp.value.trim());if(!q.title)return;if(q.badUser)toast('No person matches “@'+q.badUser+'”.');
-  if(role()==='Researcher')q.assignee=S.me;var k=mkTaskQuick(q,t.projectId,t,t.start);localRollup(t);log('Subtask "'+k.title+'" added to "'+t.title+'"');inp.value='';commit();setTimeout(function(){var i=document.querySelector('[data-enter="subadd"]');if(i)i.focus()},0)},
  tplsel:function(e){S.ui.tpl=e.dataset.id||null;renderBody()},
  tplcreate:function(e){var tp=TP(e.dataset.id),target=$('#tp-t').value,start=$('#tp-d').value||TODAY(),p;if(!tp||!isPM())return;
   if(target){p=P(target);if(!p){toast('Project not found.');return}}else{var name=$('#tp-n').value.trim();if(!name){toast('Enter the project name.');return}p={id:uid('p'),name:name,c:S.projects.length%6,status:'auto'};S.projects.push(p)}
   var made=applyTpl(tp,p.id,start,null,'none');log('Template "'+tp.name+'" applied to project "'+p.name+'"');S.ui.tpl=null;S.ui.fp=p.id;S.ui.tview='timeline';toast(made.length+' tasks added to "'+p.name+'".');S.ui.view='tasks';save();render()},
- tpltask:function(e){var a=T(e.dataset.id),tp=TP($('#dt-t').value),mode=$('#dt-m').value;if(!a||!tp||!isPM())return;
-  var made=applyTpl(tp,a.projectId,a.start,a,mode);log('Template "'+tp.name+'" added to "'+a.title+'"');toast(made.length+' steps added '+({after:'after',before:'before',none:'independent of'}[mode]||'next to')+' this task.');commit()},
  tpledit:function(e){if(!isPM())return;S.ui.tpledit=e.dataset.id||null;S.ui.tpl=null;S.ui.tpldel=null;save();renderBody()},
  tplnew:function(){if(!isPM())return;var t={id:uid('tp'),name:'New template',desc:'',tasks:[{t:'Step 1',d:1,est:1}]};S.templates.push(t);S.ui.tpledit=t.id;S.ui.tpl=null;save();renderBody()},
  tpldup:function(e){var t=TP(e.dataset.id);if(!t||!isPM())return;var c=JSON.parse(JSON.stringify(t));c.id=uid('tp');c.name=(t.name+' (copy)').slice(0,120);S.templates.push(c);S.ui.tpledit=c.id;save();renderBody()},
@@ -1318,6 +1321,7 @@ var A={
  copyjson:function(){download(JSON.stringify(S),'JSON backup')}
 };
 var H={
+ actpick:function(e){var t=T(e.dataset.id),v=e.value;e.value='';if(!t||!canEdit(t)||!v)return;if(acts(t).length>=200){toast('At most 200 activities per task.');return}t.checklist.push({id:uid('c'),t:v.slice(0,300),done:false,by:null,at:null});log('Activity "'+v+'" added to "'+t.title+'"');commit()},
  taskchk:function(e){var t=T(e.dataset.id);if(!t)return;if(!setDone(t,e.checked)){e.checked=!e.checked;return}commit()},
  acttick:function(e){var t=T(e.dataset.id);if(!t||!canEdit(t)){e.checked=!e.checked;toast('Your role cannot edit this task.');return}var c=acts(t).find(function(x){return x.id===e.dataset.cid});if(!c)return;
   c.done=e.checked;c.by=e.checked?S.me:null;c.at=e.checked?Date.now():null;log('Activity "'+c.t+'" '+(c.done?'done':'reopened'));commit()},
@@ -1332,8 +1336,8 @@ var H={
   else if(f==='after'){var a=[];v.split(/[,\s]+/).forEach(function(n){n=Math.round(parseFloat(n));if(n>=1&&n<=i&&a.indexOf(n-1)<0)a.push(n-1)});if(a.length)x.after=a;else delete x.after}
   save();renderBody()},
  fro:function(e){openFolderRO(Array.prototype.slice.call(e.files));e.value=''},
- fup:function(e){uploadFiles(e.files,e.dataset.task,'');e.value=''},
- fupg:function(e){var tk=S.ui.ftk,pj=S.ui.fpj;uploadFiles(e.files,tk,tk?'':pj);e.value=''},
+ fstage:function(e){var key=e.dataset.key,fl=Array.prototype.slice.call(e.files||[]).filter(function(f){if(f.size>MAXUP){toast('"'+f.name+'" exceeds 25 MB.');return false}return true});e.value='';if(!fl.length)return;
+  PEND[key]={files:fl,names:[],task:key==='g'?(S.ui.ftk||''):(e.dataset.task||''),project:key==='g'?(S.ui.ftk?'':(S.ui.fpj||'')):''};renderBody();renderDrawer()},
  fpj:function(e){S.ui.fpj=e.value;S.ui.ftk='';save();renderBody()},ftk:function(e){S.ui.ftk=e.value;save();renderBody()},
  openfile:function(e){var f=e.files&&e.files[0];if(!f)return;if(!isAdmin()){toast('Only Admin can import.');e.value='';return}
   if(f.size>5e6){toast('File too large (max 5 MB).');e.value='';return}
@@ -1371,7 +1375,7 @@ var H={
 /* ---------- events ---------- */
 document.addEventListener('click',function(ev){if(ev.target.closest('[data-stop]'))return;var e=ev.target.closest('[data-act]');if(!e)return;var a=A[e.dataset.act];if(a){if(e.tagName==='A')ev.preventDefault();a(e,ev)}});
 document.addEventListener('change',function(ev){var e=ev.target.closest('[data-ch]');if(!e)return;var h=H[e.dataset.ch];if(h)h(e)});
-document.addEventListener('input',function(ev){var e=ev.target;if(e.matches&&e.matches('[data-in="q"]')){S.ui.q=e.value;$('#tv').innerHTML=tv();var n=$('#xln');if(n)n.textContent=filtered().length;save();return}
+document.addEventListener('input',function(ev){var e=ev.target;if(e&&e.dataset&&e.dataset.stg){var pp=PEND[e.dataset.stg];if(pp)pp.names[+e.dataset.i]=e.value;return}if(e.matches&&e.matches('[data-in="q"]')){S.ui.q=e.value;$('#tv').innerHTML=tv();var n=$('#xln');if(n)n.textContent=filtered().length;save();return}
   /* autosave every keystroke in free-text fields (state only; no re-render, so focus is kept) */
   var c=e.dataset&&e.dataset.ch,f=e.dataset&&e.dataset.f;
   if(c==='dr'&&f==='notes'){var t=T(S.ui.drawer);if(t&&canEdit(t)){t.notes=e.value;save()}}

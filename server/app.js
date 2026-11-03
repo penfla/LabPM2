@@ -4,7 +4,7 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Author: Flavio Pendolino
- * Version: 2.0.0-beta.4
+ * Version: 2.0.0-beta.5
  * License: Apache License 2.0
  * Commercial use: permitted under the Apache License 2.0
  * Purpose: HTTP API (auth, CRUD with RBAC, SSE change feed, import/export, audit) and static client
@@ -276,7 +276,7 @@ function createApp(opts) {
     req.cid = String(req.headers['x-client-id'] || '').slice(0, 40);
     var ifRev = ifm != null && /^\d+$/.test(ifm) ? +ifm : null;
 
-    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.4' });
+    if (p === '/api/status' && m === 'GET') return json(res, 200, { setup: q.acctCount.get().n === 0, version: '2.0.0-beta.5' });
 
     if (p === '/api/setup' && m === 'POST') return body(req).then(function (b) {
       var out = D.tx(db, function () { if (q.acctCount.get().n) throw err(409, 'already initialised'); return newAccount(b, 'Admin'); });
@@ -422,7 +422,7 @@ function createApp(opts) {
       if (failed) return;
       try {
         fs.renameSync(tmp, dest);
-        var rec = { id: id, taskId: taskId || null, projectId: projectId || (task && task.d.projectId) || null, name: safeName(url.searchParams.get('name')), path: '', size: n, type: String(req.headers['content-type'] || '').slice(0, 120), added: Date.now(), by: user.id };
+        var rec = { id: id, taskId: taskId || null, projectId: projectId || (task && task.d.projectId) || null, name: safeName(url.searchParams.get('name')), title: String(url.searchParams.get('title') || '').replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, 200), path: '', size: n, type: String(req.headers['content-type'] || '').slice(0, 120), added: Date.now(), by: user.id };
         var evs = D.tx(db, function () { var d = V.normalize('files', rec); q.putEnt.run('files', id, JSON.stringify(d), 1, Date.now(), user.id); return [emit(user.id, 'files', id, 'create', 1, d)]; });
         evs[0].cid = req.cid; broadcast(evs);
         json(res, 201, { id: id, rev: 1, item: evs[0].data });
